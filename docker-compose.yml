@@ -1,0 +1,30 @@
+# Airflow 3 do projeto Akona Energy: 1 container em modo "standalone"
+# (api-server + scheduler + dag-processor + triggerer, LocalExecutor e SQLite).
+#
+#   Subir:   docker compose up -d        e abrir http://localhost:8080
+#   Parar:   docker compose stop         (use "stop", NÃO "down": o "down" apaga o
+#                                         container e o histórico de execuções)
+#
+# Ambiente local de estudo: o login está desligado (SIMPLE_AUTH_MANAGER_ALL_ADMINS),
+# então não há senha neste arquivo. Chaves e tokens ficam em Airflow Variables.
+services:
+  airflow:
+    image: apache/airflow:3.3.2
+    container_name: akona-airflow
+    command: standalone
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: America/Sao_Paulo
+      AKONA_CHEGADA: /opt/airflow/chegada
+      # Opcional: só quando um antivírus (ex.: Norton) intercepta HTTPS e as coletas
+      # falham com CERTIFICATE_VERIFY_FAILED. Veja "Problemas comuns" no README.
+      REQUESTS_CA_BUNDLE: ${AKONA_CA_BUNDLE:-}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./chegada:/opt/airflow/chegada
+      - ./certs:/opt/airflow/certs:ro

@@ -1,0 +1,17 @@
+# Dados gerados pelo Airflow (muitos arquivos e dados pessoais FICTÍCIOS):
+# só um pouco de cada fonte vai para amostras/
+chegada/
+
+# Segredos e configurações locais (tokens, webhooks, certificados da máquina): nunca versionar
+.env
+airflow/variables.json
+certs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Airflow local
+logs/
+airflow.db
