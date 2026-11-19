@@ -1,26 +1,13 @@
 """
-Simulador da "API de chamados" do Akona Energy.
+Simulador da API de chamados do Akona Energy: para um dia D, devolve os chamados abertos em D e as
+atualizações de status de chamados anteriores.
 
-O webapp Akona Energy ainda não existe. Este módulo devolve, para um dia D,
-o mesmo arquivo que a API do webapp devolveria: os chamados ABERTOS em D e as
-ATUALIZAÇÕES de status (em andamento / resolvido) que aconteceram em D.
+- Determinístico: cada chamado sai do próprio ID (AK-AAAAMMDD-TT-NNN), então o mesmo dia gera o mesmo arquivo.
+- O clima real do dia (chegada/clima/) aumenta fio caído e queda de energia.
+- Dados pessoais fictícios: CPF com dígito verificador inválido e e-mails @example.com.
+- Parte dos registros sai suja de propósito para exercitar as regras da Prata.
 
-Como funciona
-- Determinístico: o mesmo dia gera sempre o mesmo arquivo (rodar de novo não muda nada).
-- Cada chamado é uma função do seu ID (AK-AAAAMMDD-TT-NNN). Bairro, endereço,
-  cidadão e ciclo de vida saem de um gerador aleatório cuja semente é o próprio ID.
-- O clima REAL do dia (arquivo do Open-Meteo em chegada/clima/) aumenta a taxa de
-  "fio caído" e "queda de energia", como acontece de verdade em temporais.
-- Para emitir as atualizações, o simulador lê os IDs dos arquivos de dias anteriores
-  em chegada/chamados/ (a "API" conhece o próprio histórico).
-- Todos os dados pessoais são FICTÍCIOS. O CPF é gerado com dígito verificador
-  propositalmente INVÁLIDO, para nunca coincidir com o CPF de uma pessoa real, e os
-  e-mails usam o domínio reservado example.com.
-- Uma pequena parte dos registros sai "suja" de propósito (formatos variados, nulos,
-  valores inválidos e linhas duplicadas) para exercitar as regras da camada Prata.
-
-Uso fora do Airflow (testes e amostras):
-    python simulador_chamados.py 2026-10-01 2026-10-31 --chegada ./chegada --token teste-local
+Uso local: python simulador_chamados.py 2026-10-01 2026-10-31 --chegada ./chegada --token teste-local
 """
 from __future__ import annotations
 
@@ -119,7 +106,7 @@ SOBRENOMES = [
 CANAIS = ["app", "web", "telefone"]
 PESOS_CANAIS = [0.60, 0.25, 0.15]
 
-# Sujeira proposital (a Prata precisa tratar ou barrar)
+# Sujeira proposital para a Prata tratar ou barrar
 VARIANTES_TIPO = {
     "poste_apagado": ["Poste apagado", "POSTE_APAGADO", " poste apagado "],
     "lampada_piscando": ["Lâmpada piscando", "LAMPADA_PISCANDO", "lampada piscando"],
@@ -145,8 +132,6 @@ class Chamado:
     resolvido_em: datetime | None   # None = ficou parado (backlog)
     dados: dict                     # campos que não mudam ao longo da vida do chamado
 
-
-# ----------------------------------------------------------------------------- utilidades
 
 def _sem_acento(texto: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn")
@@ -192,8 +177,6 @@ def _para_json(valor):
     raise TypeError(f"tipo não serializável: {type(valor)}")
 
 
-# ----------------------------------------------------------------------------- clima
-
 def fator_clima(arquivo_clima: Path | None) -> tuple[float, float, float]:
     """Lê o arquivo do Open-Meteo do dia e devolve (fator, chuva_mm, rajada_max_kmh).
     Dia seco e sem vento forte: fator 1. Temporal: fator 3 a 5."""
@@ -205,8 +188,6 @@ def fator_clima(arquivo_clima: Path | None) -> tuple[float, float, float]:
     fator = 1 + min(chuva, 50) / 12 + max(0.0, rajada - 40) / 10
     return round(fator, 2), round(chuva, 1), round(rajada, 1)
 
-
-# ----------------------------------------------------------------------------- chamados
 
 def montar_chamado(id_chamado: str) -> Chamado:
     """Reconstrói o chamado inteiro (dados + ciclo de vida) a partir do ID."""
@@ -353,8 +334,6 @@ def _sujar(registro: dict, rng: random.Random) -> list[dict]:
     # 4) linha duplicada (a Prata deve deduplicar antes do MERGE)
     return [r, dict(r)] if rng.random() < 0.02 else [r]
 
-
-# ----------------------------------------------------------------------------- API simulada
 
 def _validar_token(token: str | None) -> None:
     if not token or token.strip().upper().startswith("TROQUE"):

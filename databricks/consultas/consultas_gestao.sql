@@ -2,7 +2,7 @@
 -- MAGIC %md
 -- MAGIC # Akona Energy · consultas da tela "Painel da gestão" do MVP web
 -- MAGIC
--- MAGIC São as consultas que o web app faria (via SQL Warehouse) para montar a tela `/gestao`. Cada bloco da tela lê
+-- MAGIC Consultas da tela `/gestao` do MVP, executadas no SQL Warehouse. Cada bloco da tela lê
 -- MAGIC **uma view da Ouro**. O filtro "últimos 30 / 90 dias" da tela vira `WHERE dias = 30` ou `WHERE dias = 90`
 -- MAGIC (aqui usamos 90, o padrão da tela). Executado pela DAG `akona_consultas`. Linhagem completa em `docs/mvp_gestao.md`.
 -- MAGIC

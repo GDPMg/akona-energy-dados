@@ -60,7 +60,7 @@ trigger-master (todo dia às 06:00, ou Trigger manual; as fontes rodam no modo i
 | DAG | Processo |
 |---|---|
 | `akona_clima`, `akona_ibge`, `akona_chamados`, `akona_manutencao` | **uma por fonte, do começo até a Prata:** `coletar_api` → `conferir_chegada` → `enviar_ao_volume` → `bronze` → `prata` (com `preparar_databricks` e `publicar_notebooks` em paralelo) |
-| `akona_ouro` | todas as tabelas da Ouro, **uma tarefa por tabela**: as 5 dimensões em paralelo → fato → tabela do MVP |
+| `akona_ouro` | todas as tabelas da Ouro, **uma tarefa por tabela**: dimensões em paralelo → fatos → views da tela do MVP |
 | `akona_consultas` | as 5 consultas de análise do MVP e a verificação de LGPD |
 | `trigger-master` | dispara todas as outras na ordem certa, esperando cada uma terminar |
 
@@ -78,8 +78,8 @@ trigger-master (todo dia às 06:00, ou Trigger manual; as fontes rodam no modo i
 |---|---|
 | **Bronze** | Auto Loader lê só os arquivos novos do Volume e nunca duplica |
 | **Prata** | tipos, nulos e inválidos tratados, 4 regras de qualidade nos chamados (mais 4 em clima e IBGE) e `MERGE` pela chave |
-| **Ouro** | modelo estrela (1 fato + 5 dimensões), dados pessoais protegidos (hash e máscara) e a tabela-contrato do MVP |
-| **MVP** | painel AI/BI do Databricks que lê somente `ouro_mvp_painel_chamados` |
+| **Ouro** | modelo estrela (2 fatos + 6 dimensões), dados pessoais protegidos (hash e máscara) e as views da tela do MVP |
+| **MVP** | tela `/gestao` do MVP web, a partir das views `ouro_gestao_*` (sem dado pessoal) |
 
 **Lotes:** a carga inicial foi feita em dois lotes de dias de coleta diferentes (**lote 1** = outubro, **lote 2** =
 novembro) e uma **reexecução** do mesmo período, que não envia nem insere nada. Depois disso, cada coleta diária vira
@@ -87,7 +87,7 @@ um lote automático (`diario_AAAA-MM-DD`).
 
 ## Modos de execução
 
-Cada DAG de fonte (`akona_clima`, `akona_ibge`, `akona_chamados`) tem o parâmetro **`modo`**, escolhido na tela de
+Cada DAG de fonte (`akona_clima`, `akona_ibge`, `akona_chamados`, `akona_manutencao`) tem o parâmetro **`modo`**, escolhido na tela de
 **Trigger** do Airflow:
 
 | `modo` | Período processado | Quando usar |
@@ -125,7 +125,7 @@ A `trigger-master` também não tem: ela só orquestra o dia a dia (modo increme
 | Município e Censo 2022 | [API do IBGE](https://servicodados.ibge.gov.br/api/docs): localidades + agregados 4714 (população, área, densidade) e 4712 (domicílios e média de moradores) | **externa**, API pública sem chave | JSON | diária (dado de referência; o MERGE mantém 1 versão) | `ibge/ibge_AAAA-MM-DD.json` |
 | Ordens de serviço da iluminação pública | sistema de manutenção da prefeitura, **simulado** por [`include/akona/simulador_manutencao.py`](include/akona/simulador_manutencao.py) a partir dos chamados de iluminação (exige token) | interna, simulada | JSON Lines (1 ordem de serviço por linha) | diária, depois dos chamados | `manutencao/manutencao_AAAA-MM-DD.json` |
 
-- **Por que simular os chamados:** o webapp ainda não existe. O simulador é determinístico (o mesmo dia gera sempre
+- **Por que simular os chamados:** o professor autorizou dados fictícios. O simulador é determinístico (o mesmo dia gera sempre
   o mesmo arquivo), traz chamados novos **e** mudanças de status de chamados antigos, usa o **clima real** do dia como
   fator de risco para a rede elétrica e injeta erros de propósito para exercitar a Prata.
 - **Por que não a ANEEL:** o dataset de interrupções só é publicado como arquivos anuais nacionais (ZIP/Parquet de
@@ -169,14 +169,12 @@ databricks/                      notebooks executados no Databricks pelas DAGs
   ouro/gestao_*.sql              views da tela "Painel da gestão" do MVP web
   consultas/consultas_mvp.sql    as 5 consultas do MVP
   consultas/verificacao_lgpd.sql prova de que a Ouro não tem dado pessoal em claro
-  consultas/consultas_gestao.sql as consultas que a tela de gestão do MVP web faria (e o JSON da API)
+  consultas/consultas_gestao.sql as consultas da tela de gestão do MVP web (e o JSON da API)
 amostras/                        um arquivo de cada fonte (dados pessoais 100% fictícios)
 airflow/variables.example.json   modelo das Variables (sem segredo)
 docs/
   como_adicionar_fonte.md        o padrão para incluir uma fonte/tabela nova
   mvp_gestao.md                  integração com o MVP web: tela de gestão, linhagem e dados simulados
-  dashboard_mvp.md               roteiro da tela do MVP (painel AI/BI)
-  relatorio_modelo.md            modelo do relatório em PDF, na ordem pedida
   img/arquitetura.svg / .png     diagrama do fluxo de dados
 docker-compose.yml               Airflow 3.3.2 (standalone) + Postgres
 ```
@@ -207,8 +205,8 @@ docker compose up -d
 
    O que não é segredo (município, coordenadas, nomes no Databricks) fica em [`config/projeto.yaml`](config/projeto.yaml).
 
-3. Ative (unpause) as 6 DAGs: `trigger-master`, `akona_clima`, `akona_ibge`, `akona_chamados`, `akona_ouro` e
-   `akona_consultas`. As DAGs filhas precisam estar ativas para rodar quando a `trigger-master` as disparar.
+3. Ative (unpause) as 7 DAGs: `trigger-master`, `akona_clima`, `akona_ibge`, `akona_chamados`, `akona_manutencao`,
+   `akona_ouro` e `akona_consultas`. As DAGs filhas precisam estar ativas para rodar quando a `trigger-master` as disparar.
 4. **Carga inicial em lotes:** para cada lote, dispare as DAGs de fonte com **Trigger → com configuração**, usando
    `modo = data_especifica`. Comece por `akona_clima` e `akona_ibge`, depois `akona_chamados`, que usa o clima. Em seguida
    dispare `akona_ouro` e depois `akona_consultas`. Espere cada lote terminar antes do próximo:
@@ -223,7 +221,7 @@ docker compose up -d
 
 5. A partir daí, a `trigger-master` roda todo dia às 06:00 (com `akona_execucao_diaria` = `true`) e dispara tudo no modo
    incremental.
-6. **Tela do MVP:** siga [`docs/dashboard_mvp.md`](docs/dashboard_mvp.md).
+6. **Tela do MVP:** as views `ouro_gestao_*` ficam prontas a cada carga (ver [docs/mvp_gestao.md](docs/mvp_gestao.md)).
 7. Para parar: `docker compose stop`. O histórico fica no Postgres, num volume do Docker.
 
 ## Camadas
@@ -327,26 +325,12 @@ erDiagram
 - **Todos os dados pessoais do projeto são fictícios:** o CPF é gerado com dígito verificador propositalmente inválido
   (nunca coincide com um CPF real) e os e-mails usam o domínio reservado `example.com`.
 
-## Contrato com o produto (o que o MVP consome e mostra)
-
-O MVP lê **uma única tabela**: `workspace.akona.ouro_mvp_painel_chamados`, atualizada a cada carga.
-
-| Coluna | Na tela do MVP |
-|---|---|
-| `status`, `bairro`, `tipo_problema`, `categoria` | filtros e gráfico de não resolvidos por bairro e tipo |
-| `moradores_afetados_estimados` | indicador "Moradores afetados" |
-| `sla_vencido`, `tempo_resolucao_horas` | indicadores "% com SLA vencido" e "Tempo médio de resolução" |
-| `posicao_fila`, `prioridade_score`, `horas_em_aberto` | tabela "Fila de prioridade" |
-| `solicitante`, `contato` | fila, sempre mascarados |
-| `data_abertura`, `chuva_no_dia_mm`, `condicao_clima` | gráfico "Rede elétrica × chuva por dia" |
-
 ## Integração com o MVP web (tela "Painel da gestão")
 
-O web app do MVP (feito por outro integrante) tem a tela
-[`/gestao`](https://ca-akona-energy-prod.salmoncoast-770d275b.eastus2.azurecontainerapps.io/gestao). O pipeline tem toda
-a cadeia que a alimentaria: uma **fonte nova simulada** (ordens de serviço da manutenção, que trazem o **poste** e a
-**reincidência**) e as **views da Ouro** com os mesmos campos do endpoint `/api/indicadores` do MVP. A integração é
-demonstrativa: o web app não está ligado ao Databricks.
+O pipeline entrega a cadeia de dados completa da tela
+[`/gestao`](https://ca-akona-energy-prod.salmoncoast-770d275b.eastus2.azurecontainerapps.io/gestao) do MVP web: os
+chamados, uma **fonte de manutenção** (ordens de serviço, que trazem o **poste** e a **reincidência**) e uma **view da
+Ouro por bloco da tela**, com os mesmos campos do endpoint `/api/indicadores` do MVP. Nenhuma delas tem dado pessoal.
 
 | Bloco da tela | View da Ouro |
 |---|---|
@@ -355,21 +339,24 @@ demonstrativa: o web app não está ligado ao Databricks.
 | Por bairro | `ouro_gestao_por_bairro` |
 | Últimas 12 semanas | `ouro_gestao_semanal` |
 
-Linhagem completa, geração dos dados simulados e como conferir: [docs/mvp_gestao.md](docs/mvp_gestao.md).
-Consultas que o web app faria: [databricks/consultas/consultas_gestao.sql](databricks/consultas/consultas_gestao.sql).
+Consultas da tela (incluindo o JSON do `/api/indicadores`): [databricks/consultas/consultas_gestao.sql](databricks/consultas/consultas_gestao.sql).
+Linhagem completa e geração dos dados simulados: [docs/mvp_gestao.md](docs/mvp_gestao.md).
+
+A Ouro também tem `ouro_mvp_painel_chamados`, uma tabela pronta para exibição com a fila de prioridade e os dados
+pessoais mascarados.
 
 ## Requisitos do enunciado → onde estão
 
 | Req. | O que pede | Onde |
 |---|---|---|
-| 01 | 2+ fontes, 1 externa | Open-Meteo e IBGE (externas) + chamados simulados |
+| 01 | 2+ fontes, 1 externa | Open-Meteo e IBGE (externas) + chamados e manutenção (simulados) |
 | 02 | DAG agendado gravando em `chegada/` com data no nome | `trigger-master` (`0 6 * * *`) dispara `akona_<fonte>`, que grava `chegada/<fonte>/<fonte>_AAAA-MM-DD.json` |
-| 03 | 2 tarefas em paralelo, conferência, chaves em Variables | `coletar_clima` ∥ `coletar_ibge`, `conferir_chegada`, tokens em Variables |
+| 03 | 2 tarefas em paralelo, conferência, chaves em Variables | `akona_clima` ∥ `akona_ibge` na `trigger-master`, `conferir_chegada`, tokens em Variables |
 | 04 | 2+ lotes de dias diferentes no Volume | tarefa `enviar_ao_volume` de cada DAG de fonte: lote 1 (outubro), lote 2 (novembro) e cargas diárias |
 | 05 | Bronze incremental sem duplicar | `databricks/bronze/bronze_autoloader.py` (genérico) + `controle_cargas_bronze` |
 | 06 | Prata: tipos, nulos, MERGE, 3+ regras com contagem | `databricks/prata/prata_<fonte>.py` + `databricks/comum/funcoes.py` + `controle_qualidade` |
 | 07 | Ouro: 1 fato, 2+ dimensões, 5 consultas (1 de impacto) | `databricks/ouro/*.sql` (DAG `akona_ouro`) + `databricks/consultas/consultas_mvp.sql` (DAG `akona_consultas`) |
-| 08 | LGPD na Ouro + tabela e tela do MVP | `ouro_dim_cidadao`, `ouro_mvp_painel_chamados`, `docs/dashboard_mvp.md` |
+| 08 | LGPD na Ouro + tabela e tela do MVP | `ouro_dim_cidadao`, views `ouro_gestao_*`, `docs/mvp_gestao.md` |
 | 09 | README com integrantes, arquitetura e passo a passo | este arquivo |
 
 ## Problemas comuns
@@ -388,4 +375,4 @@ Consultas que o web app faria: [databricks/consultas/consultas_gestao.sql](datab
   Databricks (Workflows → Job runs). Corrija o notebook em `databricks/`, e na próxima execução o Airflow publica a
   versão nova.
 - **DAG não aparece:** `docker compose exec airflow airflow dags list-import-errors`.
-- **`simular_chamados` falha com "Crie a Variable":** falta a Variable `akona_api_token`.
+- **`coletar_api` falha com "Crie a Variable":** falta a Variable `akona_api_token`.

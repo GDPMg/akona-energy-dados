@@ -25,7 +25,7 @@ def valor_na_hora(campo, tipo="DOUBLE"):
 
 horas = (
     spark.table(f"{S}.bronze_clima")
-    .withColumn("hourly", F.from_json("hourly", ESQUEMA_HOURLY))      # texto JSON -> estrutura
+    .withColumn("hourly", F.from_json("hourly", ESQUEMA_HOURLY))
     .select("arquivo_origem", "carregado_em", "hourly",
             F.posexplode("hourly.time").alias("pos", "hora_texto"))
     .select(

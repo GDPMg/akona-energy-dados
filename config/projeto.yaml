@@ -1,6 +1,5 @@
-# Configurações gerais do projeto Akona Energy.
-# Nada secreto aqui: tokens e senhas ficam em Airflow Variables (ver README).
-# Os valores abaixo podem ser usados nas URLs e parâmetros das fontes como {nome_do_campo}.
+# Configurações gerais (sem segredos: tokens ficam em Airflow Variables).
+# Os campos podem ser usados nas URLs das fontes como {nome_do_campo}.
 
 municipio: Osasco
 uf: SP
@@ -8,16 +7,14 @@ cod_ibge: "3534401"
 latitude: -23.5325
 longitude: -46.7917
 timezone: America/Sao_Paulo
-inicio_simulacao: "2026-10-01"      # primeiro dia de chamados simulados
+inicio_simulacao: "2026-10-01"
 
-# Início do histórico do projeto: o modo "full" das DAGs de fonte vai deste dia até ontem.
-# Não existe um "full" de verdade porque a operação do Akona (os chamados) começa em 01/10/2026:
-# antes disso não há chamados, e a API de clima usada guarda só os últimos ~3 meses.
+# Início do histórico: o modo "full" das DAGs de fonte vai deste dia até ontem.
 inicio_dados: "2026-10-01"
 
 databricks:
   catalogo: workspace
   schema: akona
-  volume: chegada                   # Volume que recebe os arquivos da pasta chegada/
-  pasta_workspace: /Shared/akona    # onde o Airflow publica os notebooks da pasta databricks/
-  escopo_segredos: akona            # Databricks Secrets (guarda o salt da LGPD)
+  volume: chegada
+  pasta_workspace: /Shared/akona
+  escopo_segredos: akona            # guarda o salt da LGPD

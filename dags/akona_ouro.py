@@ -1,12 +1,7 @@
 """
-### Akona Energy · camada **Ouro** (dimensões, fato e tabela do MVP)
+### Akona Energy · camada **Ouro**
 
-Uma tarefa por tabela, montadas a partir de `config/ouro.yaml`. Cada tabela é um notebook SQL em
-`databricks/ouro/<nome>.sql` que cria `workspace.akona.ouro_<nome>`. Tabelas sem dependência rodam em paralelo;
-`depende_de` define a ordem (ex.: a fato espera as dimensões de que precisa).
-
-Antes das tabelas: `preparar_databricks` garante o segredo do salt LGPD (usado no hash do CPF) e
-`publicar_notebooks` publica os notebooks da Ouro no workspace. Normalmente disparada pela `trigger-master`.
+Uma tarefa por tabela ou view de `config/ouro.yaml` (`databricks/ouro/<nome>.sql`); `depende_de` define a ordem.
 """
 from __future__ import annotations
 
@@ -24,7 +19,7 @@ with DAG(
     dag_id="akona_ouro",
     description="Akona Energy: camada Ouro (dimensões, fato e tabela-contrato do MVP) no Databricks",
     doc_md=__doc__,
-    schedule=None,                         # quem agenda é a trigger-master
+    schedule=None,                         # disparada pela trigger-master
     start_date=pendulum.datetime(2026, 10, 1, tz=configuracao.projeto()["timezone"]),
     catchup=False,
     max_active_runs=1,

@@ -26,7 +26,7 @@ LAT_MIN, LAT_MAX, LON_MIN, LON_MAX = -23.58, -23.47, -46.84, -46.73   # retângu
 
 # COMMAND ----------
 
-ref_bairros = referencia_bairros()          # lista oficial de bairros (comum/funcoes)
+ref_bairros = referencia_bairros()
 
 tratado = (
     spark.table(f"{S}.bronze_chamados")
@@ -46,7 +46,7 @@ tratado = (
     .withColumn("cpf", F.regexp_replace("cidadao_cpf", "[^0-9]", ""))
 )
 
-# "De -> para" da normalização do tipo (bom print para o relatório)
+# "De -> para" da normalização do tipo
 display(tratado.groupBy("tipo_bruto", "tipo_problema").count().orderBy("tipo_problema", F.desc("count")))
 
 # COMMAND ----------

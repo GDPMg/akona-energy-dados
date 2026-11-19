@@ -1,17 +1,10 @@
 """
-Chamadas de API do projeto Akona Energy: TODA comunicação com fontes de dados fica neste arquivo.
+Todas as chamadas de API das fontes de dados (config/fontes/<nome>.yaml).
 
-As fontes são descritas em config/fontes/<nome>.yaml e usam um de dois extratores:
+- extrator: http   -> chamada genérica; URL e parâmetros vêm do YAML.
+- extrator: python -> função deste arquivo indicada em `funcao:`; recebe (fonte, dia, contexto) e devolve o texto do arquivo.
 
-- extrator: http   -> chamada genérica (coletar_http). URL e parâmetros vêm do YAML; nada a programar.
-                       1 requisição  = o arquivo do dia é a resposta bruta da API.
-                       N requisições = o arquivo do dia é um "envelope" JSON com a resposta de cada uma.
-- extrator: python -> uma função deste arquivo, indicada em `funcao:` no YAML. Use quando a API exige
-                       lógica própria (ex.: chamar_api_akona). A função recebe (fonte, dia, contexto) e
-                       devolve o conteúdo do arquivo do dia (texto).
-
-Nos textos do YAML, {dia} é o dia coletado; {latitude}, {cod_ibge} etc. vêm de config/projeto.yaml e
-{token} etc. vêm de Airflow Variables (campo `segredos:` do YAML).
+Placeholders: {dia}; campos de config/projeto.yaml; {token} e outros `segredos:` vêm de Airflow Variables.
 """
 from __future__ import annotations
 
@@ -55,7 +48,7 @@ def coletar_http(fonte: dict, dia: str, contexto: dict) -> str:
     """Extrator genérico: executa as requisições da fonte e devolve o conteúdo do arquivo do dia."""
     respostas = {req["nome"]: chamar_api(req, contexto) for req in fonte["requisicoes"]}
     if len(respostas) == 1 and not fonte.get("envelope", False):
-        return next(iter(respostas.values())).text                      # resposta bruta
+        return next(iter(respostas.values())).text
     pacote = {
         "fonte": fonte["descricao"],
         "dia_coleta": dia,
@@ -66,8 +59,7 @@ def coletar_http(fonte: dict, dia: str, contexto: dict) -> str:
 
 
 def chamar_api_akona(fonte: dict, dia: str, contexto: dict) -> str:
-    """API de chamados do webapp Akona. Enquanto o webapp não existe, a resposta vem do simulador
-    (include/akona/simulador_chamados.py), que exige o token como a API real exigiria."""
+    """API de chamados do webapp Akona (simulada em simulador_chamados.py; exige token)."""
     conteudo, _ = gerar_conteudo_chamados(
         dia, Path(contexto["pasta_chegada"]), token=contexto.get("token"),
         inicio_simulacao=contexto["inicio_simulacao"])
@@ -75,8 +67,7 @@ def chamar_api_akona(fonte: dict, dia: str, contexto: dict) -> str:
 
 
 def chamar_api_manutencao(fonte: dict, dia: str, contexto: dict) -> str:
-    """API do sistema de manutenção da iluminação pública (ordens de serviço por poste). Enquanto o sistema não
-    existe, a resposta vem do simulador (include/akona/simulador_manutencao.py), que exige o token de integração."""
+    """API de manutenção da iluminação pública (simulada em simulador_manutencao.py; exige token)."""
     if not contexto.get("token") or str(contexto["token"]).upper().startswith("TROQUE"):
         raise PermissionError("Token de integração ausente. Crie a Variable 'akona_api_token' no Airflow.")
     conteudo, _ = gerar_conteudo_os(dia, Path(contexto["pasta_chegada"]))

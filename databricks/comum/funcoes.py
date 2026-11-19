@@ -17,14 +17,14 @@ CATALOGO, SCHEMA, VOLUME = "workspace", "akona", "chegada"
 S = f"{CATALOGO}.{SCHEMA}"
 BASE_VOLUME = f"/Volumes/{CATALOGO}/{SCHEMA}/{VOLUME}"
 
-# Bairros de Osasco atendidos (referência usada pelas Pratas de chamados e de manutenção)
+# Bairros de Osasco atendidos
 BAIRROS_OSASCO = [
     "Centro", "Vila Yara", "Presidente Altino", "Bela Vista", "Jaguaribe", "Km 18",
     "Quitaúna", "Rochdale", "Novo Osasco", "Pestana", "Bonfim", "Vila Campesina",
     "Jardim das Flores", "Munhoz Júnior", "Santo Antônio", "Ayrosa",
 ]
 
-for _conf, _valor in [("spark.sql.session.timeZone", "America/Sao_Paulo"),     # horários de Brasília
+for _conf, _valor in [("spark.sql.session.timeZone", "America/Sao_Paulo"),
                       ("spark.sql.legacy.timeParserPolicy", "CORRECTED")]:   # data ilegível vira NULL
     try:
         spark.conf.set(_conf, _valor)
@@ -56,7 +56,6 @@ CREATE TABLE IF NOT EXISTS {S}.controle_qualidade (
 
 # COMMAND ----------
 
-# ---------------------------------------------------------------- normalização
 
 def chave(coluna):
     """Normaliza texto livre: minúsculas, sem acento e com '_' (' Queda de energia ' -> 'queda_energia')."""
@@ -83,8 +82,6 @@ def fora(coluna: str, minimo, maximo):
     return F.coalesce(~F.col(coluna).between(minimo, maximo), F.lit(True))
 
 
-# ---------------------------------------------------------------- qualidade
-
 def aplicar_regras(df, regras):
     """regras = [(nome, descrição, condição que VIOLA a regra)]. Cria uma coluna por regra e a coluna 'reprovado'."""
     for nome, _, condicao in regras:
@@ -105,8 +102,6 @@ def registrar_qualidade(tabela: str, regras, df_com_regras):
     resumo.write.mode("append").saveAsTable(f"{S}.controle_qualidade")
     return resumo
 
-
-# ---------------------------------------------------------------- MERGE
 
 def ultimo_por_chave(df, chaves, ordem):
     """Deduplica: mantém 1 linha por chave (a primeira segundo 'ordem'). O MERGE exige isso."""

@@ -3,13 +3,10 @@
 O MVP do Akona Energy é um web app feito por outro integrante do grupo:
 <https://ca-akona-energy-prod.salmoncoast-770d275b.eastus2.azurecontainerapps.io/gestao>.
 
-Esta página mostra **toda a cadeia de dados que alimentaria a tela `/gestao`**: da origem dos dados, passando pelo
-Airflow e pelas camadas Bronze, Prata e Ouro no Databricks, até as consultas que o web app faria.
-
-A integração é **demonstrativa**. O web app usa a própria base de demonstração e não está ligado ao Databricks, mas a
-Ouro entrega exatamente os blocos e os **mesmos nomes de campo** do endpoint do MVP `/api/indicadores?dias=90`.
-Para ligar de verdade, bastaria o web app executar as consultas de
-[`databricks/consultas/consultas_gestao.sql`](../databricks/consultas/consultas_gestao.sql) no SQL Warehouse.
+Esta página mostra **toda a cadeia de dados da tela `/gestao`**: da origem dos dados, passando pelo Airflow e pelas
+camadas Bronze, Prata e Ouro no Databricks, até as consultas da tela. A Ouro entrega os blocos da tela com os **mesmos
+nomes de campo** do endpoint do MVP `/api/indicadores?dias=90`; as consultas estão em
+[`databricks/consultas/consultas_gestao.sql`](../databricks/consultas/consultas_gestao.sql).
 
 > O professor autorizou o uso de dados fictícios. Chamados e ordens de serviço são simulados; clima e IBGE são reais.
 
@@ -89,7 +86,7 @@ ao poste atendido. Esse sistema foi simulado seguindo o mesmo padrão das outras
 |---|---|
 | Cadastro da fonte (extrator, dependência, token, notebook da Prata) | [`config/fontes/manutencao.yaml`](../config/fontes/manutencao.yaml) |
 | Chamada da API | `chamar_api_manutencao` em [`include/akona/apis.py`](../include/akona/apis.py) |
-| Simulador (a "API" enquanto o sistema não existe) | [`include/akona/simulador_manutencao.py`](../include/akona/simulador_manutencao.py) |
+| Simulador da API | [`include/akona/simulador_manutencao.py`](../include/akona/simulador_manutencao.py) |
 | DAG (2 linhas, padrão de fonte) | [`dags/akona_manutencao.py`](../dags/akona_manutencao.py) |
 | Bronze | o notebook genérico [`bronze/bronze_autoloader.py`](../databricks/bronze/bronze_autoloader.py) (nada novo) |
 | Prata (feita a partir do modelo) | [`databricks/prata/prata_manutencao.py`](../databricks/prata/prata_manutencao.py) |
@@ -127,6 +124,3 @@ rodou as consultas da tela. No dia a dia, a `trigger-master` faz tudo sozinha.
    os 4 blocos da tela e, no fim, o **JSON no mesmo formato do `/api/indicadores`**.
 2. Compare com <https://ca-akona-energy-prod.salmoncoast-770d275b.eastus2.azurecontainerapps.io/api/indicadores?dias=90>:
    os campos são os mesmos.
-
-Os **valores** são diferentes, porque o MVP usa a própria base de demonstração e o nosso pipeline usa os chamados
-simulados de 01/10 a 17/11.

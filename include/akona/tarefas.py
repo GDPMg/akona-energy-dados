@@ -1,14 +1,8 @@
 """
-Tarefas reutilizáveis pelas DAGs (funções chamadas pelos PythonOperator).
+Tarefas reutilizáveis pelas DAGs. Fontes, URLs e tabelas vêm de config/.
 
-Nenhuma tarefa tem nome de fonte, URL ou tabela fixos no código: tudo vem de config/.
-
-Período de cada execução das DAGs de fonte: parâmetro `modo`
-- incremental      (padrão) só o dia anterior. É o que roda todo dia, disparado pela trigger-master.
-- data_especifica  o período `de` → `ate` (ex.: um dia que não rodou, ou os lotes 1 e 2).
-- full             todos os dias desde `inicio_dados` (config/projeto.yaml, 01/10/2026) até ontem.
-Em qualquer modo, dia que já tem arquivo não chama a API de novo, arquivo que já está no Volume não é reenviado e a
-Bronze só carrega o que é novo. Por isso o full é seguro: ele só PREENCHE os dias que estiverem faltando.
+Parâmetro `modo` das DAGs de fonte: incremental (dia anterior), data_especifica (de → ate) ou full (inicio_dados → ontem).
+Em qualquer modo o que já existe é pulado, então o full só preenche os dias que faltarem.
 """
 from __future__ import annotations
 
@@ -26,7 +20,7 @@ from akona.databricks_api import Databricks
 PASTA_NOTEBOOKS = Path(os.environ.get("AKONA_NOTEBOOKS", "/opt/airflow/databricks"))
 log = logging.getLogger(__name__)
 
-# Tarefas que executam notebooks: 1 nova tentativa (as camadas são idempotentes, rodar de novo é seguro)
+# 1 nova tentativa: as camadas são idempotentes
 OPCOES_NOTEBOOK = {"retries": 1, "retry_delay": timedelta(seconds=30), "execution_timeout": timedelta(minutes=60)}
 
 MODOS = {
@@ -39,7 +33,7 @@ PARAMETROS_FONTE = {
     "modo": Param("incremental", type="string", enum=list(MODOS), values_display=MODOS, title="Modo",
                   description="incremental = dia anterior; data_especifica = de → até; "
                               "full = desde o início dos dados até ontem (só preenche o que faltar)."),
-    # Campos opcionais: aceitam vazio (None), senão o formulário do Airflow os trata como obrigatórios.
+    # None permite deixar vazio no formulário
     "de": Param(None, type=["null", "string"], title="De (AAAA-MM-DD)",
                 description="Só no modo data_especifica: primeiro dia."),
     "ate": Param(None, type=["null", "string"], title="Até (AAAA-MM-DD)",
@@ -48,8 +42,6 @@ PARAMETROS_FONTE = {
                   description="Gravado no log da Bronze (ex.: lote_1). Vazio = diario_<dia>, especifico_<de>_a_<ate> ou full_<ate>."),
 }
 
-
-# ----------------------------------------------------------------------------- período
 
 def periodo(params) -> dict:
     """Resolve o período da execução a partir do modo (incremental, data_especifica ou full)."""
@@ -73,8 +65,6 @@ def periodo(params) -> dict:
     lote = str(params.get("lote") or "").strip() or lote_padrao
     return {"modo": modo, "de": de, "ate": ate, "lote": lote}
 
-
-# ----------------------------------------------------------------------------- coleta (API -> chegada/)
 
 def _contexto_da_fonte(fonte: dict) -> dict:
     """Valores disponíveis como {campo} no YAML: config/projeto.yaml + segredos (Airflow Variables)."""
@@ -125,8 +115,6 @@ def conferir_chegada(fonte: str, **context) -> dict:
     log.info("Chegada conferida: %s", resumo)
     return resumo
 
-
-# ----------------------------------------------------------------------------- Databricks
 
 def _databricks() -> Databricks:
     host = Variable.get("akona_databricks_host", default=None)

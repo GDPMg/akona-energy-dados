@@ -1,8 +1,4 @@
-# Fonte: município e Censo 2022 de Osasco (API pública do IBGE, sem chave)
-# Gera a DAG akona_ibge: API -> chegada/ibge/ibge_AAAA-MM-DD.json -> Volume -> bronze_ibge -> prata_ibge_indicadores
-#
-# Várias requisições = o arquivo do dia é um "envelope" com a resposta bruta de cada uma, no campo de mesmo nome.
-# Para trazer outro dado do IBGE, copie este arquivo com outro nome (ex.: ibge_pib.yaml) e troque as requisições.
+# Várias requisições: o arquivo do dia é um "envelope" com a resposta de cada uma, no campo de mesmo nome.
 
 nome: ibge
 descricao: IBGE - API de localidades e de agregados (Censo 2022)

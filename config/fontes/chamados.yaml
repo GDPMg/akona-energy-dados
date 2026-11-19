@@ -1,17 +1,14 @@
-# Fonte: chamados dos moradores (API do webapp Akona, simulada enquanto o webapp não existe)
-# Gera a DAG akona_chamados: API -> chegada/chamados/chamados_AAAA-MM-DD.json -> Volume -> bronze_chamados -> prata_chamados
-
 nome: chamados
 descricao: Chamados dos moradores (API do webapp Akona, simulada)
-extrator: python                   # python = função própria em include/akona/apis.py
+extrator: python
 funcao: chamar_api_akona
 depende_de: [clima]                # o simulador usa o clima do dia como fator de risco
 
-segredos:                          # {token} vem da Airflow Variable akona_api_token (nunca do código)
+segredos:                          # Airflow Variable
   token: akona_api_token
 
 bronze:
-  formato: json                    # JSON Lines: um chamado por linha
+  formato: json                    # JSON Lines
 
 prata:
   notebook: prata/prata_chamados

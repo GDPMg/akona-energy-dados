@@ -1,14 +1,4 @@
-"""
-Padrão de DAG por fonte: API -> chegada/ -> Volume -> Bronze -> Prata.
-
-Cada arquivo dags/akona_<fonte>.py só chama criar_dag_fonte("<fonte>"). Tudo o que muda de uma fonte
-para outra está em config/fontes/<fonte>.yaml.
-
-    inicio >> [coletar_api, preparar_databricks, publicar_notebooks]      (em paralelo)
-    coletar_api >> conferir_chegada
-    [conferir_chegada, preparar_databricks] >> enviar_ao_volume
-    [enviar_ao_volume, publicar_notebooks] >> bronze >> prata
-"""
+"""Padrão de DAG por fonte (API -> chegada/ -> Volume -> Bronze -> Prata), configurado por config/fontes/<fonte>.yaml."""
 from __future__ import annotations
 
 import copy
@@ -53,7 +43,7 @@ def criar_dag_fonte(nome: str) -> DAG:
         dag_id=f"akona_{nome}",
         description=f"{fonte['descricao']}: API → chegada → Volume → Bronze → Prata",
         doc_md=_documentacao(fonte),
-        schedule=None,                                  # quem agenda é a trigger-master
+        schedule=None,                                  # disparada pela trigger-master
         start_date=pendulum.datetime(2026, 10, 1, tz=configuracao.projeto()["timezone"]),
         catchup=False,
         max_active_runs=1,

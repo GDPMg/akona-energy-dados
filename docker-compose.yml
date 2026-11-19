@@ -1,12 +1,5 @@
-# Airflow 3 do projeto Akona Energy.
-#
-#   Subir:   docker compose up -d        e abrir http://127.0.0.1:8080
-#   Parar:   docker compose stop         (o histórico fica no Postgres, num volume do Docker)
-#
-# - postgres: banco de metadados do Airflow. Sem senha de propósito: a porta NÃO é exposta para fora do Docker,
-#   só o container do Airflow enxerga o banco. Assim nenhuma senha fica no repositório.
-# - airflow:  modo "standalone" (api-server + scheduler + dag-processor + triggerer) com LocalExecutor.
-#   Login desligado (ambiente local de estudo). Tokens e chaves ficam em Airflow Variables.
+# Airflow 3 (standalone) + Postgres. Subir: docker compose up -d · Parar: docker compose stop
+# O Postgres não tem senha porque a porta não é exposta fora do Docker; tokens ficam em Airflow Variables.
 services:
   postgres:
     image: postgres:16-alpine
@@ -39,23 +32,22 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: America/Sao_Paulo
-      # Docker no Windows é lento para importar o Airflow: mais tempo para ler as DAGs e releitura menos frequente
+      # Docker no Windows importa o Airflow devagar
       AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "180"
       AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "120"
       AIRFLOW__DAG_PROCESSOR__DAG_FILE_PROCESSOR_TIMEOUT: "240"
-      # Código e configurações do projeto
       PYTHONPATH: /opt/airflow/include
       AKONA_CONFIG: /opt/akona/config
       AKONA_NOTEBOOKS: /opt/akona/databricks
       AKONA_CHEGADA: /opt/airflow/chegada
-      # Opcional: só quando um antivírus intercepta HTTPS (veja "Problemas comuns" no README)
+      # opcional: antivírus que intercepta HTTPS (ver README)
       REQUESTS_CA_BUNDLE: ${AKONA_CA_BUNDLE:-}
     volumes:
-      - ./dags:/opt/airflow/dags                   # só definições de DAG
-      - ./include:/opt/airflow/include:ro          # código Python (apis, tarefas, padrão de DAG por fonte)
-      - ./config:/opt/akona/config:ro              # cadastros: projeto, fontes, ouro e consultas
-      - ./databricks:/opt/akona/databricks:ro      # notebooks publicados no Databricks pelas DAGs
-      - ./chegada:/opt/airflow/chegada             # pasta de pouso dos arquivos coletados
+      - ./dags:/opt/airflow/dags
+      - ./include:/opt/airflow/include:ro
+      - ./config:/opt/akona/config:ro
+      - ./databricks:/opt/akona/databricks:ro
+      - ./chegada:/opt/airflow/chegada
       - ./certs:/opt/airflow/certs:ro
 
 volumes:

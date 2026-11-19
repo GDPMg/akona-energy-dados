@@ -1,13 +1,4 @@
-"""
-Cliente mínimo da API REST do Databricks usado pelos DAGs do Akona Energy.
-
-Só usa `requests`. Cobre o que o pipeline precisa:
-- Unity Catalog: criar schema e Volume (se não existirem)
-- Files API: criar pastas e enviar arquivos ao Volume (sem sobrescrever)
-- Secrets: guardar o salt da LGPD (gerado aleatoriamente, ninguém vê o valor)
-- Workspace: publicar os notebooks da pasta databricks/ do repositório
-- Jobs: executar um notebook em computação serverless e esperar o resultado
-"""
+"""Cliente mínimo da API REST do Databricks: Unity Catalog, Files (Volume), Secrets, Workspace e Jobs serverless."""
 from __future__ import annotations
 
 import base64
@@ -32,7 +23,6 @@ class Databricks:
         self.sessao = requests.Session()
         self.sessao.headers["Authorization"] = f"Bearer {token}"
 
-    # ------------------------------------------------------------------ base
     TENTATIVAS = 5
 
     @staticmethod
@@ -41,9 +31,7 @@ class Databricks:
         return isinstance(erro, requests.ConnectTimeout) or "Failed to establish a new connection" in str(erro)
 
     def _chamar(self, metodo: str, caminho: str, aceitar=(200,), **kwargs) -> requests.Response:
-        """Chamada à API com novas tentativas em falhas passageiras de rede:
-        - leituras (GET/HEAD) são repetidas em qualquer falha de conexão ou erro temporário do servidor;
-        - envios (POST/PUT) só são repetidos quando a conexão nem abriu, para nunca duplicar uma ação."""
+        """Repete leituras em falhas passageiras; envios só quando a conexão nem abriu (para não duplicar ações)."""
         kwargs.setdefault("timeout", 60)
         leitura = metodo in ("GET", "HEAD")
         for tentativa in range(1, self.TENTATIVAS + 1):
@@ -66,7 +54,6 @@ class Databricks:
         resposta = self._chamar(metodo, caminho, **kwargs)
         return resposta.json() if resposta.content else {}
 
-    # ------------------------------------------------------------------ Unity Catalog
     def _criar_se_nao_existir(self, caminho_get: str, caminho_post: str, corpo: dict) -> str:
         """GET; se não existir, POST. Se outra DAG criou ao mesmo tempo (409/400 'already exists'), tudo bem."""
         if self._chamar("GET", caminho_get, aceitar=(200, 404)).status_code == 200:
@@ -89,7 +76,6 @@ class Databricks:
             {"catalog_name": catalogo, "schema_name": schema, "name": volume,
              "volume_type": "MANAGED", "comment": comentario})
 
-    # ------------------------------------------------------------------ Files API (Volumes)
     def criar_pasta(self, caminho: str) -> None:
         self._chamar("PUT", f"/api/2.0/fs/directories{caminho}", aceitar=(200, 201, 204))
 
@@ -101,7 +87,6 @@ class Databricks:
                      params={"overwrite": "false"}, data=Path(local).read_bytes(),
                      headers={"Content-Type": "application/octet-stream"}, timeout=120)
 
-    # ------------------------------------------------------------------ Secrets
     def garantir_segredo(self, escopo: str, chave: str) -> str:
         """Cria o escopo e um segredo aleatório, se ainda não existirem. O valor nunca é exibido."""
         def escopos() -> set:
@@ -119,7 +104,6 @@ class Databricks:
                    json={"scope": escopo, "key": chave, "string_value": secrets.token_urlsafe(32)})
         return "criado"
 
-    # ------------------------------------------------------------------ Workspace (notebooks)
     def publicar_notebook(self, local: Path, destino: str) -> None:
         local = Path(local)
         linguagem = "SQL" if local.suffix == ".sql" else "PYTHON"
@@ -129,7 +113,6 @@ class Databricks:
             "content": base64.b64encode(local.read_bytes()).decode("ascii"),
         })
 
-    # ------------------------------------------------------------------ Jobs (execução serverless)
     def rodar_notebook(self, caminho: str, parametros: dict | None = None, nome: str | None = None,
                        intervalo_s: int = 10, limite_s: int = 3600) -> dict:
         """Executa um notebook do workspace (serverless) e espera terminar. Falha se o notebook falhar."""

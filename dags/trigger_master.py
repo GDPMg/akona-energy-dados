@@ -1,20 +1,10 @@
 """
 ### Akona Energy · **trigger-master** (orquestrador)
 
-Dispara todas as outras DAGs na ordem certa e espera cada uma terminar:
+Dispara as DAGs de fonte respeitando `depende_de` de `config/fontes/*.yaml`, depois `akona_ouro` e `akona_consultas`.
 
-1. as DAGs de fonte (`akona_<fonte>`), respeitando `depende_de` de `config/fontes/*.yaml`
-   (hoje: `akona_clima` ∥ `akona_ibge` em paralelo → `akona_chamados`, que usa o clima do dia);
-2. `akona_ouro` (dimensões, fato e tabela do MVP), quando todas as fontes chegaram à Prata;
-3. `akona_consultas` (análises do MVP e verificação de LGPD).
-
-Uma fonte nova cadastrada em `config/fontes/` entra aqui automaticamente.
-
-**Agenda:** todo dia às 06:00. As DAGs de fonte rodam no modo padrão, **incremental** (coletam o dia anterior).
-A execução agendada só acontece se a Variable `akona_execucao_diaria` for `true`; execução manual (Trigger) sempre roda.
-
-**Data específica ou full:** o parâmetro `modo` fica em cada DAG de fonte. Dispare `akona_clima`, `akona_ibge` e
-`akona_chamados` com o modo desejado e depois `akona_ouro` e `akona_consultas` (ver README).
+**Agenda:** todo dia às 06:00, no modo incremental (dia anterior), se a Variable `akona_execucao_diaria` for `true`.
+Execução manual sempre roda. Para data específica ou full, use o parâmetro `modo` de cada DAG de fonte.
 """
 from __future__ import annotations
 
@@ -51,7 +41,7 @@ def disparar(dag_id: str) -> TriggerDagRunOperator:
     return TriggerDagRunOperator(
         task_id=dag_id,
         trigger_dag_id=dag_id,
-        trigger_run_id="{{ run_id }}",     # a execução filha recebe o mesmo nome da execução da master
+        trigger_run_id="{{ run_id }}",
         reset_dag_run=True,
         wait_for_completion=True,
         poke_interval=10,
@@ -62,7 +52,7 @@ with DAG(
     dag_id="trigger-master",
     description="Akona Energy: orquestra as DAGs de fonte, a Ouro e as consultas, na ordem certa",
     doc_md=__doc__,
-    schedule="0 6 * * *",                  # todo dia às 06:00 (as fontes coletam o dia anterior)
+    schedule="0 6 * * *",
     start_date=pendulum.datetime(2026, 11, 18, tz=TZ),
     catchup=False,
     max_active_runs=1,

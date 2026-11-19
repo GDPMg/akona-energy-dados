@@ -1,8 +1,8 @@
 -- Databricks notebook source
 -- MAGIC %md
 -- MAGIC # Ouro · mvp_painel_chamados (contrato com o produto)
--- MAGIC A **única** tabela lida pela tela do MVP (painel AI/BI). Já vem com os rótulos prontos para exibição,
--- MAGIC a posição na fila de prioridade e só dados pessoais **mascarados**. Executado pela DAG `akona_ouro`, por último.
+-- MAGIC Tabela pronta para exibição no MVP: chamados com rótulos, posição na fila de prioridade e
+-- MAGIC só dados pessoais **mascarados**. Executado pela DAG `akona_ouro`.
 
 -- COMMAND ----------
 

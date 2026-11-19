@@ -1,13 +1,4 @@
-"""
-Leitura e validação das configurações do projeto (pasta config/).
-
-    config/projeto.yaml        configurações gerais (município, coordenadas, Databricks)
-    config/fontes/<nome>.yaml  uma fonte de dados por arquivo (gera a DAG akona_<nome>)
-    config/ouro.yaml           tabelas da camada Ouro e suas dependências
-    config/consultas.yaml      notebooks de análise
-
-Erros de cadastro aparecem como erro de importação da DAG no Airflow, com a mensagem abaixo.
-"""
+"""Leitura e validação de config/ (projeto, fontes, ouro e consultas). Erros viram erro de importação da DAG."""
 from __future__ import annotations
 
 import os

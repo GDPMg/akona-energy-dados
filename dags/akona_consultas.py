@@ -1,10 +1,7 @@
 """
 ### Akona Energy · consultas de análise
 
-Executa no Databricks os notebooks de análise listados em `config/consultas.yaml`
-(`databricks/consultas/<nome>.sql`), em paralelo: as 5 consultas do MVP e a verificação de LGPD.
-Os resultados ficam na página de cada execução no Databricks (link no log de cada tarefa).
-Normalmente disparada pela `trigger-master`, depois da Ouro.
+Executa em paralelo os notebooks de `config/consultas.yaml`; o link de cada resultado fica no log da tarefa.
 """
 from __future__ import annotations
 
@@ -22,7 +19,7 @@ with DAG(
     dag_id="akona_consultas",
     description="Akona Energy: consultas de análise do MVP e verificação de LGPD no Databricks",
     doc_md=__doc__,
-    schedule=None,                         # quem agenda é a trigger-master
+    schedule=None,                         # disparada pela trigger-master
     start_date=pendulum.datetime(2026, 10, 1, tz=configuracao.projeto()["timezone"]),
     catchup=False,
     max_active_runs=1,

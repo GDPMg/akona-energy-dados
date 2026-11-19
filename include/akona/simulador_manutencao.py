@@ -1,20 +1,11 @@
 """
-Simulador da API do sistema de MANUTENÇÃO da iluminação pública (ordens de serviço) do Akona Energy.
+Simulador da API de manutenção da iluminação pública: uma ordem de serviço (OS) por chamado de iluminação,
+ligada ao poste atendido (ex.: OSC-03024), com o estado no fim do dia D.
 
-Na operação real, quando um morador abre um chamado de iluminação (poste apagado ou lâmpada piscando), a prefeitura
-abre uma ORDEM DE SERVIÇO (OS) para a equipe de manutenção, ligada ao PONTO DE ILUMINAÇÃO (o poste, ex.: OSC-03024).
-Esse sistema ainda não existe; este módulo devolve, para um dia D, o que a API dele devolveria: as OS que tiveram
-algum evento em D (abertura, início do atendimento ou conclusão), com o estado no fim do dia.
-
-Como funciona
-- Parte dos chamados do dia, já coletados em chegada/chamados/chamados_<D>.json (por isso depende da fonte chamados).
-  O ciclo de vida da OS acompanha o do chamado (include/akona/simulador_chamados.py), então os tempos batem.
-- Determinístico: o mesmo dia gera sempre o mesmo arquivo. Os sorteios usam sementes próprias e NÃO mudam
-  nenhum dado dos chamados.
-- Cada bairro tem POSTES_POR_BAIRRO pontos; o ponto de cada OS é sorteado a partir do ID do chamado. Com ~120 postes
-  por bairro, cerca de 9% das OS caem num poste que já teve OS nos 30 dias anteriores (reincidência realista).
-- Não há dado pessoal: as equipes são identificadas só por código (EQ-01 ... EQ-06).
-- Uma pequena parte dos registros sai "suja" de propósito para exercitar as regras da Prata.
+- Parte dos chamados do dia (chegada/chamados/), e a OS acompanha o ciclo de vida do chamado.
+- Determinístico e sem dado pessoal (equipes só por código).
+- ~120 postes por bairro: cerca de 9% das OS caem num poste com OS nos 30 dias anteriores (reincidência).
+- Parte dos registros sai suja de propósito para exercitar as regras da Prata.
 """
 from __future__ import annotations
 
@@ -25,8 +16,8 @@ from pathlib import Path
 
 from akona.simulador_chamados import BAIRROS, FORMATO_DATA, montar_chamado
 
-TIPOS_DE_ILUMINACAO = {"PA": "poste_apagado", "LP": "lampada_piscando"}   # códigos no ID do chamado
-CODIGO_BAIRRO = {bairro: i + 1 for i, bairro in enumerate(BAIRROS)}      # 01..16, usado no código do poste
+TIPOS_DE_ILUMINACAO = {"PA": "poste_apagado", "LP": "lampada_piscando"}
+CODIGO_BAIRRO = {bairro: i + 1 for i, bairro in enumerate(BAIRROS)}
 POSTES_POR_BAIRRO = 120
 EQUIPES = [f"EQ-{n:02d}" for n in range(1, 7)]
 SERVICOS = {
@@ -58,7 +49,7 @@ def _ids_do_dia(dia: str, pasta_chegada: Path) -> list[str]:
     ids = []
     for linha in arquivo.read_text(encoding="utf-8").splitlines():
         if linha.strip():
-            id_chamado = json.loads(linha).get("id_chamado") or ""       # AK-AAAAMMDD-TT-NNN
+            id_chamado = json.loads(linha).get("id_chamado") or ""
             partes = id_chamado.split("-")
             if len(partes) == 4 and partes[2] in TIPOS_DE_ILUMINACAO and id_chamado not in ids:
                 ids.append(id_chamado)

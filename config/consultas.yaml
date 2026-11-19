@@ -1,5 +1,4 @@
-# Consultas de análise: cada item é um notebook em databricks/consultas/<nome>.sql.
-# A DAG akona_consultas executa todos em paralelo, depois que a Ouro estiver pronta.
+# Cada item é um notebook databricks/consultas/<nome>.sql.
 
 notebooks:
   - nome: consultas_mvp
@@ -7,4 +6,4 @@ notebooks:
   - nome: verificacao_lgpd
     descricao: Prova de que a Ouro não tem dado pessoal em claro (antes x depois)
   - nome: consultas_gestao
-    descricao: Consultas que a tela Painel da gestão do MVP web usa (cartões, fila, por bairro, semanas e o JSON da API)
+    descricao: Consultas da tela Painel da gestão do MVP (cartões, fila, por bairro, semanas e o JSON da API)

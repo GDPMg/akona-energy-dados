@@ -1,9 +1,7 @@
-# Camada Ouro: cada item é um notebook SQL em databricks/ouro/<nome>.sql e cria a tabela ou view workspace.akona.ouro_<nome>.
-# A DAG akona_ouro cria uma tarefa por item e respeita depende_de (itens da Ouro que precisam existir antes).
-# Para criar uma tabela nova: escreva databricks/ouro/<nome>.sql e acrescente um item aqui.
+# Cada item é um notebook databricks/ouro/<nome>.sql que cria workspace.akona.ouro_<nome>.
 
 tabelas:
-  # --- modelo estrela dos chamados (painel AI/BI e as 5 consultas)
+  # modelo estrela dos chamados
   - nome: dim_tipo_problema
   - nome: dim_tempo
   - nome: dim_clima
@@ -14,12 +12,12 @@ tabelas:
   - nome: mvp_painel_chamados
     depende_de: [fato_chamados, dim_tempo, dim_clima, dim_bairro, dim_tipo_problema, dim_cidadao]
 
-  # --- manutenção da iluminação pública (fonte manutencao)
+  # manutenção da iluminação pública
   - nome: dim_ponto
   - nome: fato_manutencao
     depende_de: [dim_bairro]
 
-  # --- views da tela "Painel da gestão" do MVP web (ver docs/mvp_gestao.md)
+  # views da tela "Painel da gestão" do MVP
   - nome: gestao_chamados_periodo
     depende_de: [fato_chamados, dim_bairro, dim_tipo_problema]
   - nome: gestao_indicadores
