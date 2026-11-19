@@ -83,7 +83,12 @@ de moradores por domicílio (2,78 no Censo 2022), usadas para estimar quantos mo
 
 ### Requisito 02 · DAG agendado gravando na pasta chegada/
 A `trigger-master` está agendada para todo dia às 06:00 (`0 6 * * *`) e dispara as DAGs de fonte para coletar o dia
-anterior; com os parâmetros `de` e `ate`, ela também carrega um período inteiro (foi assim que os lotes foram feitos).
+anterior (modo **incremental**). Cada DAG de fonte também aceita o parâmetro `modo`: `data_especifica` (período
+`de` → `ate`, usado nos lotes 1 e 2 e para refazer um dia que não rodou) e `full` (de 01/10/2026, início do histórico
+do projeto, até ontem). Em qualquer modo, o que já existe é pulado, então o full só preenche os dias que faltarem.
+Não há um "full de verdade" (toda a história): os chamados do Akona começam em 01/10/2026 e a API de clima usada
+guarda só os últimos ~3 meses. Por isso o full cobre **todo o histórico do projeto**, e a data inicial fica em
+`config/projeto.yaml`.
 A tarefa `coletar_api` de cada fonte grava **um arquivo por coleta, com a data no nome**
 (`chegada/<fonte>/<fonte>_AAAA-MM-DD.json`, ex.: `clima_2026-10-05.json`). A coleta é idempotente: dia que já tem
 arquivo não chama a API de novo. As URLs e os parâmetros de cada API ficam em `config/fontes/<fonte>.yaml`, e todas as

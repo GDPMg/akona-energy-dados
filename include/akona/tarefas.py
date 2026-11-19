@@ -2,7 +2,13 @@
 Tarefas reutilizáveis pelas DAGs (funções chamadas pelos PythonOperator).
 
 Nenhuma tarefa tem nome de fonte, URL ou tabela fixos no código: tudo vem de config/.
-Período de cada execução: parâmetros `de`, `ate`, `lote` e `recoletar` (vazio = dia anterior).
+
+Período de cada execução das DAGs de fonte: parâmetro `modo`
+- incremental      (padrão) só o dia anterior. É o que roda todo dia, disparado pela trigger-master.
+- data_especifica  o período `de` → `ate` (ex.: um dia que não rodou, ou os lotes 1 e 2).
+- full             todos os dias desde `inicio_dados` (config/projeto.yaml, 01/10/2026) até ontem.
+Em qualquer modo, dia que já tem arquivo não chama a API de novo, arquivo que já está no Volume não é reenviado e a
+Bronze só carrega o que é novo. Por isso o full é seguro: ele só PREENCHE os dias que estiverem faltando.
 """
 from __future__ import annotations
 
@@ -23,34 +29,48 @@ log = logging.getLogger(__name__)
 # Tarefas que executam notebooks: 1 nova tentativa (as camadas são idempotentes, rodar de novo é seguro)
 OPCOES_NOTEBOOK = {"retries": 1, "retry_delay": timedelta(seconds=30), "execution_timeout": timedelta(minutes=60)}
 
-PARAMETROS_PERIODO = {
+MODOS = {
+    "incremental": "Incremental: só o dia anterior (padrão, roda todo dia)",
+    "data_especifica": "Data específica: o período de → até",
+    "full": "Full: todos os dias desde o início dos dados (01/10/2026) até ontem",
+}
+
+PARAMETROS_FONTE = {
+    "modo": Param("incremental", type="string", enum=list(MODOS), values_display=MODOS, title="Modo",
+                  description="incremental = dia anterior; data_especifica = de → até; "
+                              "full = desde o início dos dados até ontem (só preenche o que faltar)."),
     "de": Param("", type="string", title="De (AAAA-MM-DD)",
-                description="Primeiro dia de coleta. Vazio = dia anterior."),
+                description="Só no modo data_especifica: primeiro dia."),
     "ate": Param("", type="string", title="Até (AAAA-MM-DD)",
-                 description="Último dia de coleta. Vazio = igual a 'de'."),
-    "lote": Param("", type="string", title="Rótulo do lote",
-                  description="Gravado no log da Bronze (ex.: lote_1, lote_2, reexecucao). Vazio = diario_<até>."),
-    "recoletar": Param(False, type="boolean", title="Recoletar",
-                       description="Chama a API mesmo se o arquivo do dia já existir na chegada/."),
+                 description="Só no modo data_especifica: último dia. Vazio = só o dia 'de'."),
+    "lote": Param("", type="string", title="Rótulo do lote (opcional)",
+                  description="Gravado no log da Bronze (ex.: lote_1). Vazio = diario_<dia>, especifico_<de>_a_<ate> ou full_<ate>."),
 }
 
 
 # ----------------------------------------------------------------------------- período
 
 def periodo(params) -> dict:
-    """Resolve o período da execução a partir dos parâmetros (vazio = dia anterior)."""
+    """Resolve o período da execução a partir do modo (incremental, data_especifica ou full)."""
     ontem = (datetime.now(ZoneInfo(configuracao.projeto()["timezone"])) - timedelta(days=1)).date().isoformat()
-    de = str(params.get("de") or "").strip() or ontem
-    ate = str(params.get("ate") or "").strip() or de
+    modo = str(params.get("modo") or "incremental").strip()
+    if modo == "incremental":
+        de = ate = ontem
+        lote_padrao = f"diario_{ontem}"
+    elif modo == "data_especifica":
+        de = str(params.get("de") or "").strip()
+        if not de:
+            raise ValueError("No modo data_especifica, informe o parâmetro 'de' (e 'ate', se for mais de um dia).")
+        ate = str(params.get("ate") or "").strip() or de
+        lote_padrao = f"especifico_{de}" if de == ate else f"especifico_{de}_a_{ate}"
+    elif modo == "full":
+        de, ate = configuracao.projeto()["inicio_dados"], ontem
+        lote_padrao = f"full_{ate}"
+    else:
+        raise ValueError(f"Modo '{modo}' inválido. Use um destes: {', '.join(MODOS)}.")
     chegada.dias_do_periodo(de, ate)                                    # valida as datas
-    lote = str(params.get("lote") or "").strip() or f"diario_{ate}"
-    return {"de": de, "ate": ate, "lote": lote, "recoletar": bool(params.get("recoletar", False))}
-
-
-def definir_periodo(**context) -> dict:
-    resultado = periodo(context["params"])
-    log.info("Período desta execução: %s", resultado)
-    return resultado
+    lote = str(params.get("lote") or "").strip() or lote_padrao
+    return {"modo": modo, "de": de, "ate": ate, "lote": lote}
 
 
 # ----------------------------------------------------------------------------- coleta (API -> chegada/)
@@ -69,19 +89,22 @@ def _contexto_da_fonte(fonte: dict) -> dict:
 
 def coletar(fonte: str, **context) -> dict:
     """Chama a API da fonte para cada dia do período e grava chegada/<fonte>/<fonte>_<dia>.json.
-    Dia que já tem arquivo não é coletado de novo (a não ser com recoletar = true)."""
+    Dia que já tem arquivo não chama a API de novo: a coleta só preenche os dias que faltam."""
     cfg, p = configuracao.fonte(fonte), periodo(context["params"])
     contexto = _contexto_da_fonte(cfg)
-    coletados, ja_existiam = [], 0
-    for dia in chegada.dias_do_periodo(p["de"], p["ate"]):
+    dias = chegada.dias_do_periodo(p["de"], p["ate"])
+    coletados = []
+    for dia in dias:
         destino = chegada.arquivo_do_dia(fonte, dia)
-        if destino.exists() and not p["recoletar"]:
-            ja_existiam += 1
+        if destino.exists():
             continue
         chegada.gravar(destino, apis.extrair(cfg, dia, {**contexto, "dia": dia}))
         coletados.append(dia)
-    resumo = {"fonte": fonte, "de": p["de"], "ate": p["ate"], "coletados": len(coletados), "ja_existiam": ja_existiam}
-    log.info("Coleta: %s", resumo)
+    resumo = {"fonte": fonte, "modo": p["modo"], "de": p["de"], "ate": p["ate"], "dias_no_periodo": len(dias),
+              "ja_existiam": len(dias) - len(coletados), "coletados": len(coletados), "dias_coletados": coletados}
+    log.info("Coleta (%s, %s a %s): %s", p["modo"], p["de"], p["ate"],
+             f"{len(coletados)} dia(s) faltando foram coletados: {coletados}" if coletados
+             else f"nenhum dia faltando ({len(dias)} dia(s) já coletados)")
     return resumo
 
 

@@ -35,7 +35,7 @@ pelo Airflow, até entregar à tela do MVP o que a gestão vê.
 **Uma DAG por processo** no Airflow 3 (Docker, no PC da equipe), orquestradas pela **`trigger-master`**:
 
 ```
-trigger-master (todo dia às 06:00, ou Trigger manual com de / ate / lote)
+trigger-master (todo dia às 06:00, ou Trigger manual; as fontes rodam no modo incremental)
  ├─ akona_clima ──┐                (em paralelo)
  ├─ akona_ibge ───┼─→ akona_ouro ─→ akona_consultas
  └─ akona_chamados┘   (chamados espera o clima: o simulador usa a chuva do dia)
@@ -52,7 +52,9 @@ trigger-master (todo dia às 06:00, ou Trigger manual com de / ate / lote)
   (`/Shared/akona`), dispara a execução (Jobs API), espera terminar e falha se o notebook falhar. O log da tarefa traz
   o link da execução. Ninguém cola código à mão: o que roda é sempre o que está no Git.
 - **Envio ao Volume** (Files API): idempotente, porque arquivos que já estão lá são pulados.
-- **Coleta idempotente:** dia que já tem arquivo em `chegada/` não chama a API de novo (a não ser com `recoletar`).
+- **Coleta idempotente:** dia que já tem arquivo em `chegada/` não chama a API de novo.
+- **Modos de execução** (parâmetro `modo` das DAGs de fonte): `incremental`, `data_especifica` ou `full`. Veja a seção
+  [Modos de execução](#modos-de-execução).
 - **Orientado a configuração:** URLs, parâmetros, dependências e notebooks de cada fonte ficam em `config/`. Uma fonte
   nova é um cadastro novo, sem mexer no código principal. Veja [docs/como_adicionar_fonte.md](docs/como_adicionar_fonte.md).
 
@@ -66,6 +68,37 @@ trigger-master (todo dia às 06:00, ou Trigger manual com de / ate / lote)
 **Lotes:** a carga inicial foi feita em dois lotes de dias de coleta diferentes (**lote 1** = outubro, **lote 2** =
 novembro) e uma **reexecução** do mesmo período, que não envia nem insere nada. Depois disso, cada coleta diária vira
 um lote automático (`diario_AAAA-MM-DD`).
+
+## Modos de execução
+
+Cada DAG de fonte (`akona_clima`, `akona_ibge`, `akona_chamados`) tem o parâmetro **`modo`**, escolhido na tela de
+**Trigger** do Airflow:
+
+| `modo` | Período processado | Quando usar |
+|---|---|---|
+| `incremental` (padrão) | só o **dia anterior** | todo dia: é o que a `trigger-master` dispara às 06:00 |
+| `data_especifica` | de `de` até `ate` (`ate` vazio = só o dia `de`) | um dia que não rodou (PC desligado, API fora do ar) ou uma carga por lotes |
+| `full` | de **01/10/2026** (`inicio_dados` em `config/projeto.yaml`) até ontem | conferência geral: garante que **nenhum dia está faltando** |
+
+**Em qualquer modo, nada é duplicado nem apagado:**
+- a coleta pula os dias que já têm arquivo;
+- o envio pula os arquivos que já estão no Volume;
+- a Bronze (Auto Loader) só carrega arquivos novos;
+- a Prata faz MERGE pela chave.
+
+Por isso o `full` é seguro: ele **só preenche** os dias que faltarem. O log da tarefa `coletar_api` mostra o resultado,
+por exemplo "1 dia(s) faltando foram coletados: ['2026-11-18']" ou "nenhum dia faltando (49 dia(s) já coletados)".
+
+**Por que o full começa em 01/10/2026:** não existe um "full de verdade" (toda a história) neste projeto:
+- a operação do Akona (os chamados) começa em 01/10/2026, então antes disso não há chamados;
+- a API de clima usada (`/v1/forecast` do Open-Meteo) guarda só os últimos ~3 meses;
+- o IBGE é dado de referência (Censo 2022), igual em todos os dias.
+
+O full é, portanto, **todo o histórico do projeto**: do primeiro dia de dados até ontem. A data fica em
+`config/projeto.yaml` e pode ser mudada sem mexer no código.
+
+As DAGs `akona_ouro` e `akona_consultas` não têm modo porque **sempre recriam tudo** com o que existe na Prata.
+A `trigger-master` também não tem: ela só orquestra o dia a dia (modo incremental).
 
 ## Fontes de dados
 
@@ -153,16 +186,20 @@ docker compose up -d
 
 3. Ative (unpause) as 6 DAGs: `trigger-master`, `akona_clima`, `akona_ibge`, `akona_chamados`, `akona_ouro` e
    `akona_consultas`. As DAGs filhas precisam estar ativas para rodar quando a `trigger-master` as disparar.
-4. **Carga inicial:** na `trigger-master`, use **Trigger → com configuração** três vezes, esperando cada uma terminar:
+4. **Carga inicial em lotes:** para cada lote, dispare as DAGs de fonte com **Trigger → com configuração**, usando
+   `modo = data_especifica`. Comece por `akona_clima` e `akona_ibge`, depois `akona_chamados`, que usa o clima. Em seguida
+   dispare `akona_ouro` e depois `akona_consultas`. Espere cada lote terminar antes do próximo:
 
-   | Execução | `de` | `ate` | `lote` | Resultado esperado |
+   | Lote | `de` | `ate` | `lote` | Resultado esperado |
    |---|---|---|---|---|
-   | 1 | 2026-10-01 | 2026-10-31 | `lote_1` | coleta e envia outubro; cria Bronze, Prata, Ouro e consultas |
+   | 1 | 2026-10-01 | 2026-10-31 | `lote_1` | coleta e envia outubro; cria Bronze e Prata |
    | 2 | 2026-11-01 | 2026-11-17 | `lote_2` | envia só novembro; a Bronze cresce e o MERGE atualiza status |
    | 3 | 2026-10-01 | 2026-11-17 | `reexecucao` | 0 arquivos enviados e 0 linhas novas na Bronze (prova de idempotência) |
 
-5. A partir daí, a `trigger-master` roda todo dia às 06:00 e coleta o dia anterior (com `akona_execucao_diaria` = `true`).
-   Cada DAG também pode ser disparada sozinha, com os mesmos parâmetros.
+   Para uma carga de uma vez só, use `modo = full` nas três fontes.
+
+5. A partir daí, a `trigger-master` roda todo dia às 06:00 (com `akona_execucao_diaria` = `true`) e dispara tudo no modo
+   incremental.
 6. **Tela do MVP:** siga [`docs/dashboard_mvp.md`](docs/dashboard_mvp.md).
 7. Para parar: `docker compose stop`. O histórico fica no Postgres, num volume do Docker.
 

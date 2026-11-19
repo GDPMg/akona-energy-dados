@@ -10,6 +10,11 @@ longitude: -46.7917
 timezone: America/Sao_Paulo
 inicio_simulacao: "2026-10-01"      # primeiro dia de chamados simulados
 
+# Início do histórico do projeto: o modo "full" das DAGs de fonte vai deste dia até ontem.
+# Não existe um "full" de verdade porque a operação do Akona (os chamados) começa em 01/10/2026:
+# antes disso não há chamados, e a API de clima usada guarda só os últimos ~3 meses.
+inicio_dados: "2026-10-01"
+
 databricks:
   catalogo: workspace
   schema: akona

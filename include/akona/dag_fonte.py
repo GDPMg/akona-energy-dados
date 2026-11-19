@@ -38,8 +38,12 @@ Processo completo da fonte, até a camada Prata: {extracao} → `chegada/{fonte[
 → `bronze_{fonte['nome']}` (Auto Loader) → `{fonte['prata'].get('tabela', 'prata')}` (notebook `{fonte['prata']['notebook']}`).
 
 - Configuração: `config/fontes/{fonte['nome']}.yaml` · depende das fontes: {dependencias}
-- Parâmetros: `de`, `ate` (vazio = dia anterior), `lote` (rótulo no log da Bronze) e `recoletar`.
-- Normalmente disparada pela DAG `trigger-master`, mas pode rodar sozinha.
+- **Parâmetro `modo`** (Trigger com configuração):
+  - `incremental` (padrão): só o dia anterior. É o que a `trigger-master` dispara todo dia.
+  - `data_especifica`: o período `de` → `ate` (ex.: um dia que não rodou).
+  - `full`: todos os dias desde o início dos dados (01/10/2026, `config/projeto.yaml`) até ontem.
+- Em qualquer modo, o que já existe é pulado (coleta, envio e Bronze): o full só **preenche** os dias que faltarem.
+- `lote` (opcional): rótulo gravado no log de contagens da Bronze.
 """
 
 
@@ -53,7 +57,7 @@ def criar_dag_fonte(nome: str) -> DAG:
         start_date=pendulum.datetime(2026, 10, 1, tz=configuracao.projeto()["timezone"]),
         catchup=False,
         max_active_runs=1,
-        params=copy.deepcopy(tarefas.PARAMETROS_PERIODO),
+        params=copy.deepcopy(tarefas.PARAMETROS_FONTE),
         default_args={"owner": "akona-dados", "retries": 0, "on_failure_callback": avisar_falha},
         tags=["akona", "fonte", nome],
     ) as dag:

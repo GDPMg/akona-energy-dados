@@ -93,5 +93,5 @@ Para uma consulta de análise nova, crie `databricks/consultas/<nome>.sql` e acr
 
 1. Abra o Airflow: a DAG `akona_ibge_pib` aparece em até 2 minutos. Se algo estiver errado no YAML, a mensagem aparece em
    **Dag Import Errors**.
-2. Rode a DAG sozinha (Trigger, com `de`/`ate`) ou a `trigger-master` inteira.
+2. Rode a DAG sozinha (Trigger, com `modo` = `full` para trazer todo o histórico) ou a `trigger-master` inteira.
 3. Confira no Databricks: `bronze_ibge_pib`, `prata_ibge_pib` e as linhas em `controle_qualidade`.
