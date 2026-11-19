@@ -12,7 +12,7 @@ COMO USAR ESTE MODELO (apague este bloco antes de exportar)
 **Global Solution FIAP 2026.2 · CitizenTech**
 **Disciplina:** Big Data Architecture & Data Integration · Engenharia de Software, 4º ano
 
-**Repositório:** [https://github.com/USUARIO/REPOSITORIO](https://github.com/USUARIO/REPOSITORIO)
+**Repositório:** [https://github.com/GDPMg/akona-energy-dados](https://github.com/GDPMg/akona-energy-dados)
 
 ---
 
@@ -387,4 +387,4 @@ Limitações e próximos passos: substituir o simulador pela API real do webapp;
 para validar a consulta 4 com dados reais; processar a Prata de forma incremental (streaming com `foreachBatch`) quando o
 volume crescer; e, fora do plano Free, trocar o Airflow local por um ambiente gerenciado.
 
-**Repositório:** [https://github.com/USUARIO/REPOSITORIO](https://github.com/USUARIO/REPOSITORIO)
+**Repositório:** [https://github.com/GDPMg/akona-energy-dados](https://github.com/GDPMg/akona-energy-dados)
