@@ -39,11 +39,12 @@ PARAMETROS_FONTE = {
     "modo": Param("incremental", type="string", enum=list(MODOS), values_display=MODOS, title="Modo",
                   description="incremental = dia anterior; data_especifica = de → até; "
                               "full = desde o início dos dados até ontem (só preenche o que faltar)."),
-    "de": Param("", type="string", title="De (AAAA-MM-DD)",
+    # Campos opcionais: aceitam vazio (None), senão o formulário do Airflow os trata como obrigatórios.
+    "de": Param(None, type=["null", "string"], title="De (AAAA-MM-DD)",
                 description="Só no modo data_especifica: primeiro dia."),
-    "ate": Param("", type="string", title="Até (AAAA-MM-DD)",
+    "ate": Param(None, type=["null", "string"], title="Até (AAAA-MM-DD)",
                  description="Só no modo data_especifica: último dia. Vazio = só o dia 'de'."),
-    "lote": Param("", type="string", title="Rótulo do lote (opcional)",
+    "lote": Param(None, type=["null", "string"], title="Rótulo do lote (opcional)",
                   description="Gravado no log da Bronze (ex.: lote_1). Vazio = diario_<dia>, especifico_<de>_a_<ate> ou full_<ate>."),
 }
 

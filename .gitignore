@@ -15,3 +15,6 @@ __pycache__/
 # Airflow local
 logs/
 airflow.db
+
+# prints do relatório (vão no PDF, não no repositório)
+prints/
