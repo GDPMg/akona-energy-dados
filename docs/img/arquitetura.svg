@@ -11,40 +11,46 @@
   <text x="30" y="28" font-size="13" font-weight="700" fill="#6b7280" letter-spacing="1.5">ETAPAS 1 E 2 · COLETA NO AIRFLOW (DOCKER, NO PC DA EQUIPE)</text>
 
   <g font-size="15" fill="#1f2937">
-    <rect x="30" y="45" width="250" height="56" rx="8" fill="#eef2ff" stroke="#3b4a6b"/>
-    <text x="45" y="68" font-weight="700">Open-Meteo (API pública)</text>
-    <text x="45" y="89" font-size="13" fill="#4b5563">clima horário de Osasco</text>
+    <rect x="30" y="42" width="250" height="44" rx="8" fill="#eef2ff" stroke="#3b4a6b"/>
+    <text x="45" y="60" font-weight="700" font-size="14">Open-Meteo (API pública)</text>
+    <text x="45" y="78" font-size="12" fill="#4b5563">clima horário de Osasco</text>
 
-    <rect x="30" y="112" width="250" height="56" rx="8" fill="#eef2ff" stroke="#3b4a6b"/>
-    <text x="45" y="135" font-weight="700">IBGE (API pública)</text>
-    <text x="45" y="156" font-size="13" fill="#4b5563">município + Censo 2022</text>
+    <rect x="30" y="92" width="250" height="44" rx="8" fill="#eef2ff" stroke="#3b4a6b"/>
+    <text x="45" y="110" font-weight="700" font-size="14">IBGE (API pública)</text>
+    <text x="45" y="128" font-size="12" fill="#4b5563">município + Censo 2022</text>
 
-    <rect x="30" y="179" width="250" height="56" rx="8" fill="#eef2ff" stroke="#3b4a6b"/>
-    <text x="45" y="202" font-weight="700">API Akona (simulada)</text>
-    <text x="45" y="223" font-size="13" fill="#4b5563">chamados dos moradores</text>
+    <rect x="30" y="142" width="250" height="44" rx="8" fill="#eef2ff" stroke="#3b4a6b"/>
+    <text x="45" y="160" font-weight="700" font-size="14">API Akona (simulada)</text>
+    <text x="45" y="178" font-size="12" fill="#4b5563">chamados dos moradores</text>
+
+    <rect x="30" y="192" width="250" height="44" rx="8" fill="#eef2ff" stroke="#3b4a6b"/>
+    <text x="45" y="210" font-weight="700" font-size="14">API da manutenção (simulada)</text>
+    <text x="45" y="228" font-size="12" fill="#4b5563">ordens de serviço por poste</text>
 
     <rect x="360" y="45" width="350" height="190" rx="8" fill="#f4f6fb" stroke="#3b4a6b" stroke-width="1.5"/>
     <text x="378" y="72" font-weight="700" font-size="16">Airflow 3 · trigger-master (06:00)</text>
-    <text x="378" y="100" font-size="14">• akona_clima ∥ akona_ibge → akona_chamados</text>
-    <text x="378" y="125" font-size="14">• cada fonte: API → chegada → Volume</text>
-    <text x="378" y="150" font-size="14">   → Bronze → Prata (1 DAG por processo)</text>
-    <text x="378" y="175" font-size="14">• depois: akona_ouro → akona_consultas</text>
-    <text x="378" y="200" font-size="14">• cadastros em config/, tokens em Variables</text>
-    <text x="378" y="222" font-size="12" fill="#6b7280">coleta o dia anterior · lotes por parâmetro de/até</text>
+    <text x="378" y="100" font-size="13.5">• clima ∥ ibge → chamados → manutencao</text>
+    <text x="378" y="125" font-size="13.5">• cada fonte: API → chegada → Volume</text>
+    <text x="378" y="150" font-size="13.5">   → Bronze → Prata (1 DAG por processo)</text>
+    <text x="378" y="175" font-size="13.5">• depois: akona_ouro → akona_consultas</text>
+    <text x="378" y="200" font-size="13.5">• cadastros em config/, tokens em Variables</text>
+    <text x="378" y="222" font-size="12" fill="#6b7280">modos: incremental · data_especifica · full</text>
 
-    <rect x="790" y="85" width="380" height="110" rx="8" fill="#f4f6fb" stroke="#3b4a6b" stroke-width="1.5"/>
-    <text x="808" y="112" font-weight="700" font-size="16">chegada/ (pasta local)</text>
-    <text x="808" y="138" font-size="13">clima/clima_AAAA-MM-DD.json</text>
-    <text x="808" y="158" font-size="13">ibge/ibge_AAAA-MM-DD.json</text>
-    <text x="808" y="178" font-size="13">chamados/chamados_AAAA-MM-DD.json</text>
+    <rect x="790" y="75" width="380" height="130" rx="8" fill="#f4f6fb" stroke="#3b4a6b" stroke-width="1.5"/>
+    <text x="808" y="102" font-weight="700" font-size="16">chegada/ (pasta local)</text>
+    <text x="808" y="126" font-size="13">clima/clima_AAAA-MM-DD.json</text>
+    <text x="808" y="146" font-size="13">ibge/ibge_AAAA-MM-DD.json</text>
+    <text x="808" y="166" font-size="13">chamados/chamados_AAAA-MM-DD.json</text>
+    <text x="808" y="186" font-size="13">manutencao/manutencao_AAAA-MM-DD.json</text>
   </g>
 
   <g stroke="#3b4a6b" stroke-width="1.8" fill="none" marker-end="url(#seta)">
-    <line x1="280" y1="73" x2="356" y2="73"/>
-    <line x1="280" y1="140" x2="356" y2="140"/>
-    <line x1="280" y1="207" x2="356" y2="207"/>
+    <line x1="280" y1="64" x2="356" y2="64"/>
+    <line x1="280" y1="114" x2="356" y2="114"/>
+    <line x1="280" y1="164" x2="356" y2="164"/>
+    <line x1="280" y1="214" x2="356" y2="214"/>
     <line x1="710" y1="140" x2="786" y2="140"/>
-    <polyline points="980,195 980,262 135,262 135,322"/>
+    <polyline points="980,205 980,262 135,262 135,322"/>
   </g>
   <rect x="250" y="250" width="700" height="24" fill="#ffffff"/>
   <text x="600" y="267" font-size="13" fill="#374151" text-anchor="middle">as DAGs enviam os lotes ao Volume (Files API) e executam cada notebook no Databricks (Jobs API)</text>
@@ -73,15 +79,15 @@
 
     <rect x="732" y="325" width="206" height="120" rx="8" fill="#fff4cc" stroke="#b08900" stroke-width="1.5"/>
     <text x="747" y="352" font-weight="700">Ouro</text>
-    <text x="747" y="377" font-size="13">fato + 5 dimensões</text>
-    <text x="747" y="398" font-size="13">5 consultas SQL</text>
+    <text x="747" y="377" font-size="13">2 fatos + 6 dimensões</text>
+    <text x="747" y="398" font-size="13">5 consultas + views da tela</text>
     <text x="747" y="417" font-size="13">LGPD: hash e máscara</text>
 
     <rect x="966" y="325" width="206" height="120" rx="8" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
-    <text x="981" y="352" font-weight="700">MVP · Painel AI/BI</text>
-    <text x="981" y="377" font-size="13">lê somente</text>
-    <text x="981" y="398" font-size="13">ouro_mvp_painel_</text>
-    <text x="981" y="417" font-size="13">chamados (contrato)</text>
+    <text x="981" y="352" font-weight="700">MVP · tela /gestao</text>
+    <text x="981" y="377" font-size="13">lê só as views</text>
+    <text x="981" y="398" font-size="13">ouro_gestao_* (mesmo</text>
+    <text x="981" y="417" font-size="13">JSON do /api/indicadores)</text>
   </g>
 
   <g stroke="#3b4a6b" stroke-width="1.8" fill="none" marker-end="url(#seta)">
@@ -91,6 +97,6 @@
     <line x1="938" y1="385" x2="962" y2="385"/>
   </g>
 
-  <text x="30" y="478" font-size="12.5" fill="#4b5563">Tabelas: bronze_chamados, bronze_clima, bronze_ibge → prata_chamados, prata_clima_horario, prata_ibge_indicadores →</text>
-  <text x="30" y="498" font-size="12.5" fill="#4b5563">ouro_fato_chamados + ouro_dim_tempo, ouro_dim_clima, ouro_dim_bairro, ouro_dim_tipo_problema, ouro_dim_cidadao → ouro_mvp_painel_chamados</text>
+  <text x="30" y="478" font-size="12.5" fill="#4b5563">Tabelas: bronze_{chamados, clima, ibge, manutencao} → prata_chamados, prata_clima_horario, prata_ibge_indicadores, prata_manutencao →</text>
+  <text x="30" y="498" font-size="12.5" fill="#4b5563">ouro_fato_chamados, ouro_fato_manutencao + dim_tempo, dim_clima, dim_bairro, dim_tipo_problema, dim_cidadao, dim_ponto → ouro_mvp_painel_chamados, ouro_gestao_*</text>
 </svg>
