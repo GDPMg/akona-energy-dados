@@ -14,17 +14,21 @@
 # MAGIC | `ouro_dim_cidadao` | dimensão | cidadão **pseudonimizado** (hash do CPF + nome e telefone mascarados) |
 # MAGIC | `ouro_mvp_painel_chamados` | **contrato do MVP** | única tabela lida pela tela do MVP (sem dado pessoal em claro) |
 # MAGIC
-# MAGIC **LGPD:** o CPF vira `sha2(salt + cpf, 256)`. O *salt* é um segredo digitado no widget abaixo e **nunca** vai para o repositório.
+# MAGIC **LGPD:** o CPF vira `sha2(salt + cpf, 256)`. O *salt* fica no **Databricks Secrets** (escopo `akona`, chave `salt_lgpd`):
+# MAGIC foi gerado aleatoriamente pelo Airflow, ninguém vê o valor e ele **nunca** vai para o repositório.
 # MAGIC Sem salt, daria para descobrir o CPF testando os ~10⁹ CPFs possíveis. Nome e telefone ficam mascarados, e-mail e número da casa
 # MAGIC não entram na Ouro e as coordenadas são arredondadas para 3 casas (~100 m).
 
 # COMMAND ----------
 
-dbutils.widgets.text("salt_lgpd", "", "Salt LGPD (segredo: não salvar no repositório)")
-SALT = dbutils.widgets.get("salt_lgpd").strip()
+try:
+    SALT = dbutils.secrets.get("akona", "salt_lgpd")       # criado pela tarefa preparar_databricks do Airflow
+except Exception:
+    dbutils.widgets.text("salt_lgpd", "", "Salt LGPD (só se o segredo não existir)")
+    SALT = dbutils.widgets.get("salt_lgpd").strip()
 if len(SALT) < 12:
-    raise ValueError("Preencha o widget 'salt_lgpd' com um segredo de pelo menos 12 caracteres. "
-                     "Use sempre o mesmo valor (o hash precisa ser estável) e não o coloque no GitHub.")
+    raise ValueError("Salt LGPD ausente: rode o DAG akona_lakehouse (ele cria o segredo akona/salt_lgpd) "
+                     "ou preencha o widget 'salt_lgpd' com um segredo de 12+ caracteres.")
 
 spark.conf.set("spark.sql.session.timeZone", "America/Sao_Paulo")
 S = "workspace.akona"

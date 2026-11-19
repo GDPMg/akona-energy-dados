@@ -4,7 +4,7 @@ A tela do MVP é um **dashboard AI/BI do Databricks** que lê **somente** a tabe
 `workspace.akona.ouro_mvp_painel_chamados`. É a visão da gestão (prefeitura e distribuidora): o que está aberto,
 onde está, o que fazer primeiro e quantas pessoas estão sendo afetadas.
 
-> Pré-requisito: os notebooks `00` a `03` já rodaram e a tabela `ouro_mvp_painel_chamados` existe.
+> Pré-requisito: o DAG `akona_lakehouse` já rodou pelo menos uma vez, então a tabela `ouro_mvp_painel_chamados` existe.
 
 ## 1. Criar o dashboard
 

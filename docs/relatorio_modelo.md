@@ -42,12 +42,18 @@ Este trabalho entrega o **componente de Dados** do MVP. A tela do MVP é um pain
 
 ![Fluxo de dados](img/arquitetura.png)
 
-*Figura 1 – Fluxo de dados do Akona Energy: as fontes são coletadas pelo Airflow para a pasta chegada/, enviadas em lotes ao Volume do Databricks e tratadas nas camadas Bronze, Prata e Ouro até a tela do MVP.*
+*Figura 1 – Fluxo de dados do Akona Energy: as fontes são coletadas pelo Airflow para a pasta chegada/, enviadas em lotes ao Volume do Databricks e tratadas nas camadas Bronze, Prata e Ouro até a tela do MVP, tudo orquestrado pelo Airflow.*
 
-O Airflow roda em Docker no computador da equipe e grava os arquivos na pasta `chegada/`. Como o Databricks Free
-Edition não se conecta ao Airflow, os arquivos sobem ao Volume `workspace.akona.chegada` pela interface, em lotes. A partir
-daí, o Auto Loader carrega a Bronze, a Prata trata e valida, a Ouro organiza em modelo estrela e protege os dados pessoais,
-e o painel AI/BI lê só a tabela-contrato `ouro_mvp_painel_chamados`.
+O Airflow roda em Docker no computador da equipe com dois DAGs. O `akona_coleta_diaria` grava os arquivos na pasta
+`chegada/`. O `akona_lakehouse` publica os notebooks do repositório no workspace, envia os arquivos ao Volume
+`workspace.akona.chegada` pela API de arquivos do Databricks e dispara, um a um, os notebooks de cada camada, que rodam
+**no Databricks** (serverless). O Auto Loader carrega a Bronze, a Prata trata e valida, a Ouro organiza em modelo
+estrela e protege os dados pessoais, e o painel AI/BI lê só a tabela-contrato `ouro_mvp_painel_chamados`.
+
+**Decisão de projeto:** o enunciado sugere enviar os arquivos ao Volume pela interface. Automatizamos esse envio com o
+próprio Airflow porque o Databricks Free Edition aceita chamadas de API com token pessoal. O envio continua acontecendo
+**em lotes de dias de coleta diferentes** (lote 1 e lote 2), mas é idempotente (arquivos já enviados são pulados) e
+não depende de ninguém copiar arquivos ou colar código à mão.
 
 ## 4. Tabela de fontes
 
@@ -80,24 +86,35 @@ por fonte com a data no nome, por exemplo `clima_2026-10-05.json`.
 *Figura 3 – Arquivos gravados pelo DAG em chegada/, um por fonte e por dia de coleta.*
 
 ### Requisito 03 · Paralelismo, conferência da chegada e chaves fora do código
-`coletar_clima` e `coletar_ibge` rodam **em paralelo** depois de `inicio`. `simular_chamados` espera o clima, porque usa
-a chuva do dia. A tarefa `conferir_chegada` verifica se os três arquivos do dia existem, não estão vazios e são JSON
-válido; se faltar algum, ela falha e o `on_failure_callback` dispara a notificação. No fim, `notificar` registra o
-resumo (e envia ao Discord, se o webhook estiver configurado). O token da API fica na Variable `akona_api_token`, que o
-Airflow mascara na tela, e nada sensível aparece no código.
+`coletar_clima` e `coletar_ibge` rodam **em paralelo** depois de `inicio` (na visão Gantt as duas começam no mesmo
+segundo). `simular_chamados` espera o clima, porque usa a chuva do dia. A tarefa `conferir_chegada` verifica se os três
+arquivos do dia existem, não estão vazios e são JSON válido; se faltar algum, ela falha e o `on_failure_callback`
+dispara a notificação. No fim, `notificar` registra o resumo (e envia ao Discord, se o webhook estiver configurado).
+No DAG `akona_lakehouse`, `publicar_notebooks` e `preparar_databricks` também rodam em paralelo. Os tokens (API de
+chamados e Databricks) ficam em Variables (`akona_api_token`, `akona_databricks_token`), que o Airflow mascara na tela;
+nada sensível aparece no código ou no repositório.
 
-[PRINT: Admin → Variables com akona_api_token mascarada]
-*Figura 4 – Variables do Airflow: o token da API fica fora do código e aparece mascarado.*
+[PRINT: visão Gantt de uma execução da coleta, com coletar_clima e coletar_ibge lado a lado]
+*Figura 4 – Gantt: coletar_clima e coletar_ibge executando em paralelo.*
+
+[PRINT: Admin → Variables com akona_api_token e akona_databricks_token mascaradas]
+*Figura 4b – Variables do Airflow: tokens fora do código e mascarados.*
 
 [PRINT: log da tarefa notificar mostrando a mensagem "coleta de AAAA-MM-DD concluída"]
 *Figura 5 – Notificação de sucesso registrada pela tarefa notificar.*
 
 ### Requisito 04 · Dois ou mais lotes enviados ao Volume
-Os arquivos foram enviados ao Volume `workspace.akona.chegada` pela interface do Databricks em dois lotes: **lote 1**
-com os dias de outubro (01/10 a 31/10) e **lote 2** com os dias de novembro (01/11 a [DD]/11).
+Os arquivos foram enviados ao Volume `workspace.akona.chegada` pelo DAG `akona_lakehouse` (tarefa `enviar_ao_volume`,
+API de arquivos do Databricks) em lotes de dias de coleta diferentes: **lote 1** com os dias de outubro (01/10 a 31/10,
+[n] arquivos) e **lote 2** com os dias de novembro (01/11 a 17/11, [n] arquivos). Uma terceira execução
+(**reexecucao**, 01/10 a 17/11) não enviou nenhum arquivo, porque todos já estavam no Volume. A partir daí, cada coleta
+diária dispara o envio daquele dia.
+
+[PRINT: log da tarefa enviar_ao_volume do lote 2 mostrando "total_enviados" e "ja_existiam"]
+*Figura 6 – Envio do lote 2 ao Volume pelo Airflow.*
 
 [PRINT: Catalog → Volumes → chegada → chamados mostrando arquivos de outubro e novembro]
-*Figura 6 – Volume com os arquivos dos dois lotes.*
+*Figura 6b – Volume com os arquivos dos dois lotes.*
 
 ### Requisito 05 · Bronze incremental e sem duplicação
 O Auto Loader (`cloudFiles`, `trigger(availableNow=True)`) guarda no checkpoint quais arquivos já leu. No lote 2 só
@@ -156,6 +173,15 @@ estão no `.gitignore`, e as amostras usam dados fictícios.
 
 [PRINT: visão Grid com as execuções concluídas (verdes) desde 01/10]
 *Figura 14 – Visão Grid: [n] execuções diárias concluídas com sucesso.*
+
+[PRINT: visão Graph do DAG akona_lakehouse]
+*Figura 14b – DAG akona_lakehouse: publicar_notebooks ∥ preparar_databricks → enviar_ao_volume → bronze → prata → ouro → consultas → notificar.*
+
+[PRINT: visão Grid do akona_lakehouse com as execuções lote_1, lote_2 e reexecucao concluídas]
+*Figura 14c – Execuções do lakehouse: lote 1, lote 2 e reexecução.*
+
+[PRINT: Databricks → Jobs & Pipelines → Runs, com as execuções "akona - bronze/prata/ouro/consultas" disparadas pelo Airflow]
+*Figura 14d – Execuções dos notebooks no Databricks, disparadas pelo Airflow.*
 
 ## 7. Contagens da Bronze antes e depois do 2º lote e da 2ª execução
 
@@ -331,17 +357,20 @@ tabela da Ouro**, `workspace.akona.ouro_mvp_painel_chamados`.
 
 ## 10. Conclusão técnica e link do repositório
 
-O pipeline cobre o ciclo completo pedido: coleta agendada no Airflow 3 com tarefas paralelas, conferência da chegada,
-notificação e segredos em Variables; ingestão incremental e idempotente com Auto Loader; uma Prata que trata tipos e nulos,
-barra registros inválidos com regras contadas e usa MERGE para incorporar as mudanças de status dos chamados; e uma Ouro
-dimensional que responde às perguntas do MVP e protege os dados pessoais com hash e máscara.
+O pipeline cobre o ciclo completo pedido, de ponta a ponta e sem passos manuais: coleta agendada no Airflow 3 com tarefas
+paralelas, conferência da chegada, notificação e segredos em Variables; envio automático e idempotente dos lotes ao Volume;
+execução de cada camada no Databricks disparada pelo Airflow; ingestão incremental com Auto Loader; uma Prata que trata
+tipos e nulos, barra registros inválidos com regras contadas e usa MERGE para incorporar as mudanças de status dos
+chamados; e uma Ouro dimensional que responde às perguntas do MVP e protege os dados pessoais com hash e máscara.
 
-Decisões importantes: (1) o simulador de chamados é determinístico e emite chamados novos e atualizações, o que torna
-o MERGE realista e o reprocessamento seguro; (2) o MVP lê uma única tabela-contrato, o que isola o produto das mudanças
-internas do modelo; (3) o salt do hash fica fora do repositório, porque um hash de CPF sem salt é reversível por força bruta.
+Decisões importantes: (1) o Airflow publica os notebooks do repositório antes de executá-los, então o código que roda no
+Databricks é sempre o versionado no Git; (2) o simulador de chamados é determinístico e emite chamados novos e
+atualizações, o que torna o MERGE realista e o reprocessamento seguro; (3) o MVP lê uma única tabela-contrato, o que
+isola o produto das mudanças internas do modelo; (4) o salt do hash fica no Databricks Secrets, gerado automaticamente,
+porque um hash de CPF sem salt é reversível por força bruta.
 
-Limitações e próximos passos: substituir o simulador pela API real do webapp; automatizar o envio ao Volume (fora do
-Databricks Free Edition, com um conector ou Jobs); incluir os dados de interrupções da ANEEL para validar a consulta 4
-com dados reais; e processar a Prata de forma incremental (streaming com `foreachBatch`) quando o volume crescer.
+Limitações e próximos passos: substituir o simulador pela API real do webapp; incluir os dados de interrupções da ANEEL
+para validar a consulta 4 com dados reais; processar a Prata de forma incremental (streaming com `foreachBatch`) quando o
+volume crescer; e, fora do plano Free, trocar o Airflow local por um ambiente gerenciado.
 
 **Repositório:** [https://github.com/USUARIO/REPOSITORIO](https://github.com/USUARIO/REPOSITORIO)

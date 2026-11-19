@@ -20,11 +20,17 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: America/Sao_Paulo
+      # Docker no Windows é lento para importar o Airflow: mais tempo para ler os DAGs e releitura menos frequente
+      AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "180"
+      AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "120"
+      AIRFLOW__DAG_PROCESSOR__DAG_FILE_PROCESSOR_TIMEOUT: "240"
       AKONA_CHEGADA: /opt/airflow/chegada
+      AKONA_NOTEBOOKS: /opt/airflow/databricks
       # Opcional: só quando um antivírus (ex.: Norton) intercepta HTTPS e as coletas
       # falham com CERTIFICATE_VERIFY_FAILED. Veja "Problemas comuns" no README.
       REQUESTS_CA_BUNDLE: ${AKONA_CA_BUNDLE:-}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./chegada:/opt/airflow/chegada
+      - ./databricks:/opt/airflow/databricks:ro   # notebooks publicados no Databricks pelo DAG akona_lakehouse
       - ./certs:/opt/airflow/certs:ro

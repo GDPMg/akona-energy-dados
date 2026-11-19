@@ -28,7 +28,14 @@ for conf, valor in [("spark.sql.session.timeZone", "America/Sao_Paulo"),       #
 
 S = "workspace.akona"
 
-TIPOS =["fio_caido", "queda_energia", "poste_apagado", "lampada_piscando"]
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {S}.controle_qualidade (
+  execucao_em TIMESTAMP, tabela STRING, regra STRING, descricao STRING,
+  total_lido BIGINT, barrados BIGINT
+) COMMENT 'Log das regras de qualidade da Prata: total barrado por regra (requisito 06)'
+""")
+
+TIPOS = ["fio_caido", "queda_energia", "poste_apagado", "lampada_piscando"]
 STATUS = ["aberto", "em_andamento", "resolvido"]
 BAIRROS_OSASCO = [
     "Centro", "Vila Yara", "Presidente Altino", "Bela Vista", "Jaguaribe", "Km 18",
@@ -225,10 +232,15 @@ WHEN NOT MATCHED THEN INSERT *
 
 # MAGIC %md
 # MAGIC ## 2. Clima horário (Open-Meteo)
+# MAGIC Na Bronze o objeto `hourly` está guardado como **texto JSON** (dado bruto). Aqui aplicamos o schema com `from_json`.
 # MAGIC A API devolve **listas paralelas** (`time[i]`, `precipitation[i]`, ...). O `posexplode` gera uma linha por hora
 # MAGIC com a posição `i`, e usamos a mesma posição para pegar o valor de cada lista.
 
 # COMMAND ----------
+
+ESQUEMA_HOURLY = ("struct<time:array<string>, precipitation:array<string>, wind_speed_10m:array<string>, "
+                  "wind_gusts_10m:array<string>, temperature_2m:array<string>, weather_code:array<string>>")
+
 
 def valor_na_hora(campo, tipo="DOUBLE"):
     return F.expr(f"try_cast(try_element_at(hourly.{campo}, pos + 1) AS {tipo})")
@@ -236,6 +248,7 @@ def valor_na_hora(campo, tipo="DOUBLE"):
 
 horas = (
     spark.table(f"{S}.bronze_clima")
+    .withColumn("hourly", F.from_json("hourly", ESQUEMA_HOURLY))      # texto JSON -> estrutura
     .select("arquivo_origem", "carregado_em", "hourly",
             F.posexplode("hourly.time").alias("pos", "hora_texto"))
     .select(
@@ -285,13 +298,22 @@ WHEN NOT MATCHED THEN INSERT *
 
 # MAGIC %md
 # MAGIC ## 3. Indicadores do IBGE (Censo 2022)
-# MAGIC A resposta da API de agregados é aninhada: variável → resultados → séries → `{ano: valor}`.
-# MAGIC Achatamos tudo em uma linha por indicador e ano. Como o IBGE é coletado todo dia, as dezenas de
-# MAGIC arquivos viram só 6 linhas na Prata: é o MERGE mostrando a idempotência.
+# MAGIC A resposta da API de agregados é aninhada: variável → resultados → séries → `{ano: valor}`. Na Bronze ela está
+# MAGIC guardada como texto JSON; aplicamos o schema com `from_json` e achatamos tudo em uma linha por indicador e ano.
+# MAGIC Como o IBGE é coletado todo dia, as dezenas de arquivos viram só 6 linhas na Prata: é o MERGE mostrando a idempotência.
 
 # COMMAND ----------
 
-bronze_ibge = spark.table(f"{S}.bronze_ibge")
+ESQUEMA_MUNICIPIO = "struct<id:string, nome:string, microrregiao:struct<mesorregiao:struct<UF:struct<sigla:string>>>>"
+ESQUEMA_AGREGADO = ("array<struct<id:string, variavel:string, unidade:string, resultados:array<struct<"
+                    "series:array<struct<localidade:struct<id:string, nome:string>, serie:map<string,string>>>>>>>")
+
+bronze_ibge = (
+    spark.table(f"{S}.bronze_ibge")
+    .withColumn("municipio", F.from_json("municipio", ESQUEMA_MUNICIPIO))
+    .withColumn("censo_populacao", F.from_json("censo_populacao", ESQUEMA_AGREGADO))
+    .withColumn("censo_domicilios", F.from_json("censo_domicilios", ESQUEMA_AGREGADO))
+)
 
 
 def explodir_agregado(coluna):
@@ -308,7 +330,7 @@ def explodir_agregado(coluna):
                 F.col("variavel.id").alias("indicador_id"),
                 F.col("variavel.variavel").alias("indicador"),
                 F.col("variavel.unidade").alias("unidade"),
-                F.explode(F.from_json(F.to_json("serie.serie"), "map<string,string>")).alias("ano", "valor_texto"))
+                F.explode("serie.serie").alias("ano", "valor_texto"))                 # mapa {ano: valor}
     )
 
 

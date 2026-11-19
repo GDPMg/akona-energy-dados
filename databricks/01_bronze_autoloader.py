@@ -13,17 +13,26 @@
 # MAGIC
 # MAGIC - **Incremental:** o Auto Loader guarda no *checkpoint* quais arquivos já leu. No 2º lote só os arquivos novos entram.
 # MAGIC - **Sem duplicar:** rodar de novo sem arquivos novos não insere nada (`linhas_novas = 0`).
-# MAGIC - Antes de rodar, escolha no widget **lote** o rótulo desta execução. Ele aparece no log de contagens (print do relatório).
+# MAGIC - Este notebook é executado pelo DAG `akona_lakehouse` do Airflow, que antes envia os arquivos ao Volume.
+# MAGIC   O parâmetro **lote** (rótulo da carga) chega do Airflow e é gravado no log de contagens (print do relatório).
 
 # COMMAND ----------
 
 from pyspark.sql import functions as F
 
-dbutils.widgets.dropdown("lote", "lote_1", ["lote_1", "lote_2", "reexecucao", "outro"], "Rótulo desta execução")
+dbutils.widgets.text("lote", "manual", "Rótulo desta execução")
 LOTE = dbutils.widgets.get("lote")
 
 BASE = "/Volumes/workspace/akona/chegada"
 FONTES = ["chamados", "clima", "ibge"]
+
+spark.sql("""
+CREATE TABLE IF NOT EXISTS workspace.akona.controle_cargas_bronze (
+  execucao_em TIMESTAMP, lote STRING, fonte STRING, tabela STRING,
+  linhas_antes BIGINT, linhas_depois BIGINT, linhas_novas BIGINT,
+  arquivos_antes BIGINT, arquivos_depois BIGINT
+) COMMENT 'Log de cada execução da Bronze: contagens antes e depois (requisito 05)'
+""")
 
 # COMMAND ----------
 

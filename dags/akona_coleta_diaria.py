@@ -11,11 +11,13 @@ e grava **um arquivo por fonte** na pasta `chegada/`, com a data no nome:
 | Chamados dos moradores | `chegada/chamados/chamados_AAAA-MM-DD.json` | API do Akona (simulada, exige token) |
 
 Fluxo: `inicio >> [coletar_clima, coletar_ibge]` (em paralelo) · `coletar_clima >> simular_chamados`
-(o simulador usa o clima do dia) · `[simular_chamados, coletar_ibge] >> conferir_chegada >> notificar`.
+(o simulador usa o clima do dia) · `[simular_chamados, coletar_ibge] >> conferir_chegada >> notificar`
+· `conferir_chegada >> lakehouse_automatico >> disparar_lakehouse` (envia o dia ao Databricks e roda as camadas).
 
 Configuração e segredos ficam em **Airflow Variables**, nunca no código:
 `akona_config` (JSON com coordenadas e código IBGE; tem valores padrão),
-`akona_api_token` (obrigatório) e `akona_webhook_secret` (opcional, webhook do Discord).
+`akona_api_token` (obrigatório), `akona_webhook_secret` (opcional, webhook do Discord) e
+`akona_lakehouse_automatico` (`true` liga o disparo diário do DAG `akona_lakehouse`).
 """
 from __future__ import annotations
 
@@ -29,10 +31,14 @@ from pathlib import Path
 import pendulum
 import requests
 from airflow.providers.standard.operators.empty import EmptyOperator
-from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.sdk import DAG, Variable
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # permite importar o pacote dags/akona
+_PASTA_DAGS = str(Path(__file__).resolve().parent)  # permite importar o pacote dags/akona
+if _PASTA_DAGS not in sys.path:  # no fim da lista: a pasta montada do Windows é lenta para buscas
+    sys.path.append(_PASTA_DAGS)
+from akona.notificacao import avisar_falha, enviar_notificacao  # noqa: E402
 from akona.simulador_chamados import gerar_arquivo_chamados  # noqa: E402
 
 TZ = "America/Sao_Paulo"
@@ -73,18 +79,6 @@ def _gravar(fonte: str, dia: str, conteudo: str) -> Path:
     temporario.write_text(conteudo, encoding="utf-8")
     temporario.replace(destino)
     return destino
-
-
-def _enviar_notificacao(texto: str) -> None:
-    """Registra a notificação no log e, se houver webhook configurado, envia ao Discord."""
-    log.info("NOTIFICAÇÃO: %s", texto)
-    webhook = Variable.get("akona_webhook_secret", default="")
-    if not webhook:
-        return
-    try:
-        requests.post(webhook, json={"content": texto[:1900]}, timeout=15).raise_for_status()
-    except requests.RequestException as erro:
-        log.warning("Não foi possível enviar a notificação ao webhook: %s", erro)
 
 
 # ----------------------------------------------------------------------------- tarefas
@@ -176,15 +170,12 @@ def notificar(**context) -> None:
     dia = _dia_coletado(context)
     resumo = context["ti"].xcom_pull(task_ids="conferir_chegada") or {}
     partes = ", ".join(f"{fonte}: {info['registros']} registro(s)" for fonte, info in resumo.items())
-    _enviar_notificacao(f"✅ Akona Energy · coleta de {dia} concluída ({partes}).")
+    enviar_notificacao(f"✅ Akona Energy · coleta de {dia} concluída ({partes}).")
 
 
-def avisar_falha(context) -> None:
-    """Callback de falha: avisa qual tarefa falhou (depois de esgotar as tentativas)."""
-    tarefa = context["ti"].task_id
-    _enviar_notificacao(
-        f"❌ Akona Energy · a tarefa '{tarefa}' falhou na execução {context.get('run_id')}. Veja o log no Airflow."
-    )
+def lakehouse_automatico() -> bool:
+    """Só dispara o lakehouse se a Variable akona_lakehouse_automatico for 'true' (senão, pula)."""
+    return str(Variable.get("akona_lakehouse_automatico", default="false")).strip().lower() == "true"
 
 
 # ----------------------------------------------------------------------------- DAG
@@ -211,7 +202,19 @@ with DAG(
     chamados = PythonOperator(task_id="simular_chamados", python_callable=simular_chamados)
     conferir = PythonOperator(task_id="conferir_chegada", python_callable=conferir_chegada, retries=0)
     aviso = PythonOperator(task_id="notificar", python_callable=notificar)
+    automatico = ShortCircuitOperator(task_id="lakehouse_automatico", python_callable=lakehouse_automatico)
+    disparar = TriggerDagRunOperator(
+        task_id="disparar_lakehouse",
+        trigger_dag_id="akona_lakehouse",
+        conf={  # o dia coletado é o dia anterior ao da execução
+            "de": "{{ macros.ds_add(ds, -1) }}",
+            "ate": "{{ macros.ds_add(ds, -1) }}",
+            "lote": "diario_{{ macros.ds_add(ds, -1) }}",
+        },
+        wait_for_completion=False,
+    )
 
     inicio >> [clima, ibge]
     clima >> chamados
     [chamados, ibge] >> conferir >> aviso
+    conferir >> automatico >> disparar

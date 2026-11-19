@@ -29,8 +29,8 @@
     <text x="378" y="125" font-size="14">• coletar_clima ∥ coletar_ibge (paralelo)</text>
     <text x="378" y="150" font-size="14">• simular_chamados usa o clima do dia</text>
     <text x="378" y="175" font-size="14">• conferir_chegada → notificar</text>
-    <text x="378" y="200" font-size="14">• token e configuração em Variables</text>
-    <text x="378" y="222" font-size="12" fill="#6b7280">backfill desde 01/10/2026 (catchup)</text>
+    <text x="378" y="200" font-size="14">• tokens e configuração em Variables</text>
+    <text x="378" y="222" font-size="12" fill="#6b7280">backfill desde 01/10/2026 · dispara akona_lakehouse</text>
 
     <rect x="790" y="85" width="380" height="110" rx="8" fill="#f4f6fb" stroke="#3b4a6b" stroke-width="1.5"/>
     <text x="808" y="112" font-weight="700" font-size="16">chegada/ (pasta local)</text>
@@ -46,18 +46,18 @@
     <line x1="710" y1="140" x2="786" y2="140"/>
     <polyline points="980,195 980,262 135,262 135,322"/>
   </g>
-  <rect x="330" y="250" width="540" height="24" fill="#ffffff"/>
-  <text x="600" y="267" font-size="13" fill="#374151" text-anchor="middle">upload manual pela interface, em lotes (o Databricks Free não conecta no Airflow)</text>
+  <rect x="250" y="250" width="700" height="24" fill="#ffffff"/>
+  <text x="600" y="267" font-size="13" fill="#374151" text-anchor="middle">DAG akona_lakehouse: envia os lotes ao Volume (Files API) e executa cada camada no Databricks (Jobs API)</text>
 
   <!-- Faixa 2: lakehouse -->
-  <text x="160" y="305" font-size="13" font-weight="700" fill="#6b7280" letter-spacing="1.5">ETAPAS 3 A 6 · LAKEHOUSE NO DATABRICKS FREE EDITION E ENTREGA</text>
+  <text x="160" y="305" font-size="13" font-weight="700" fill="#6b7280" letter-spacing="1.5">ETAPAS 3 A 6 · LAKEHOUSE NO DATABRICKS FREE (SERVERLESS), ORQUESTRADO PELO AIRFLOW</text>
 
   <g font-size="15" fill="#1f2937">
     <rect x="30" y="325" width="206" height="120" rx="8" fill="#f4f6fb" stroke="#3b4a6b" stroke-width="1.5"/>
     <text x="45" y="352" font-weight="700">Volume (UC)</text>
     <text x="45" y="377" font-size="13">workspace.akona.chegada</text>
-    <text x="45" y="398" font-size="13">2 lotes de dias de</text>
-    <text x="45" y="417" font-size="13">coleta diferentes</text>
+    <text x="45" y="398" font-size="13">lote 1, lote 2 e</text>
+    <text x="45" y="417" font-size="13">carga diária automática</text>
 
     <rect x="264" y="325" width="206" height="120" rx="8" fill="#f6e7d8" stroke="#8a5a2b" stroke-width="1.5"/>
     <text x="279" y="352" font-weight="700">Bronze</text>

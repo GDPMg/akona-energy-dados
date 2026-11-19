@@ -7,7 +7,8 @@ iluminação pública e de energia (poste apagado, lâmpada piscando, fio caído
 prefeitura e a distribuidora acompanhem, priorizem e resolvam os chamados.
 
 Este repositório contém **só o componente de Dados**: o pipeline que coleta dados reais e simulados no **Airflow 3**,
-trata em camadas **Bronze, Prata e Ouro** no **Databricks Free Edition** e entrega à tela do MVP o que a gestão vê.
+envia os arquivos ao **Databricks Free Edition** e executa lá as camadas **Bronze, Prata e Ouro**, tudo orquestrado
+pelo Airflow, até entregar à tela do MVP o que a gestão vê.
 
 ## Integrantes
 
@@ -29,14 +30,29 @@ trata em camadas **Bronze, Prata e Ouro** no **Databricks Free Edition** e entre
 
 ![Fluxo de dados do Akona Energy, da fonte ao MVP](docs/img/arquitetura.png)
 
-1. **Airflow 3** (Docker, no PC da equipe) roda todo dia às 06:00 e coleta o **dia anterior** de cada fonte,
-   gravando um arquivo por fonte e por dia na pasta `chegada/`.
-2. O Databricks Free Edition não se conecta ao Airflow, então os arquivos sobem **pela interface** para o Volume
-   `workspace.akona.chegada`, **em lotes** (lote 1 = outubro, lote 2 = novembro).
-3. **Bronze** (Auto Loader): lê só os arquivos novos e nunca duplica.
-4. **Prata**: tipos, nulos e inválidos tratados, 4 regras de qualidade nos chamados (mais 4 em clima e IBGE) e `MERGE` pela chave.
-5. **Ouro**: modelo estrela (1 fato + 5 dimensões), dados pessoais protegidos (hash e máscara) e a tabela-contrato do MVP.
-6. **MVP**: painel AI/BI do Databricks que lê somente `ouro_mvp_painel_chamados`.
+Dois DAGs no Airflow 3 (Docker, no PC da equipe):
+
+1. **`akona_coleta_diaria`** roda todo dia às 06:00 e coleta o **dia anterior** de cada fonte, gravando um arquivo
+   por fonte e por dia na pasta local `chegada/`. Ao final, dispara o DAG do lakehouse com o dia coletado.
+2. **`akona_lakehouse`** leva os arquivos ao Databricks e executa as camadas **no próprio Databricks** (serverless):
+   - `publicar_notebooks`: importa os notebooks da pasta [`databricks/`](databricks/) do repositório para o workspace
+     (`/Shared/akona`). O que roda no Databricks é sempre o que está no Git: ninguém cola código à mão.
+   - `preparar_databricks`: cria, se ainda não existirem, o schema `workspace.akona`, o Volume `chegada`, as pastas e o
+     segredo do salt da LGPD.
+   - `enviar_ao_volume`: envia ao Volume os arquivos do período pedido (Files API). Arquivos que já estão lá são pulados.
+   - `bronze → prata → ouro → consultas`: cada tarefa dispara um notebook no Databricks (Jobs API), espera terminar e
+     falha se o notebook falhar. O log da tarefa traz o link da execução no Databricks.
+
+| Camada | O que acontece |
+|---|---|
+| **Bronze** | Auto Loader lê só os arquivos novos do Volume e nunca duplica |
+| **Prata** | tipos, nulos e inválidos tratados, 4 regras de qualidade nos chamados (mais 4 em clima e IBGE) e `MERGE` pela chave |
+| **Ouro** | modelo estrela (1 fato + 5 dimensões), dados pessoais protegidos (hash e máscara) e a tabela-contrato do MVP |
+| **MVP** | painel AI/BI do Databricks que lê somente `ouro_mvp_painel_chamados` |
+
+**Lotes:** a carga inicial foi feita em dois lotes de dias de coleta diferentes (**lote 1** = outubro, **lote 2** =
+novembro) e uma **reexecução** do mesmo período, que não envia nem insere nada. Depois disso, cada coleta diária vira
+um lote automático (`diario_AAAA-MM-DD`).
 
 ## Fontes de dados
 
@@ -57,11 +73,13 @@ trata em camadas **Bronze, Prata e Ouro** no **Databricks Free Edition** e entre
 
 ```
 dags/
-  akona_coleta_diaria.py        DAG do Airflow (coleta, conferência e notificação)
+  akona_coleta_diaria.py        DAG 1: coleta, conferência, notificação e disparo do lakehouse
+  akona_lakehouse.py            DAG 2: publica notebooks, envia ao Volume e executa as camadas no Databricks
   akona/simulador_chamados.py   API de chamados simulada (só biblioteca padrão do Python)
+  akona/databricks_api.py       cliente da API REST do Databricks (Unity Catalog, Files, Secrets, Workspace, Jobs)
+  akona/notificacao.py          notificações (log da tarefa + webhook opcional do Discord)
   .airflowignore                o pacote akona/ não é DAG
-databricks/
-  00_setup.py                   schema, Volume, pastas e tabelas de controle
+databricks/                     notebooks executados no Databricks pelo Airflow
   01_bronze_autoloader.py       Bronze com Auto Loader + contagens antes e depois
   02_prata.py                   tratamento, regras de qualidade e MERGE
   03_ouro.py                    modelo estrela, LGPD e tabela-contrato do MVP
@@ -79,50 +97,48 @@ MongoDB não foi usado (é opcional no enunciado).
 
 ## Como reproduzir o pipeline
 
-### 1. Coleta no Airflow 3
-
-Pré-requisito: [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e aberto.
+**Pré-requisitos:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) e uma conta no
+[Databricks Free Edition](https://www.databricks.com/learn/free-edition) com um **token de acesso pessoal**
+(Settings → Developer → Access tokens). Não é preciso criar nada no Databricks: o Airflow cria tudo.
 
 ```powershell
 # na pasta do projeto
 docker compose up -d
 ```
 
-1. Aguarde 1 a 2 minutos e abra **http://localhost:8080**. Não há tela de login: é um ambiente local de estudo.
-2. Crie as Variables em **Admin → Variables → Add** (chaves e tokens **nunca** ficam no código):
+1. Aguarde 1 a 2 minutos e abra **http://127.0.0.1:8080**. Não há tela de login: é um ambiente local de estudo.
+2. Crie as Variables em **Admin → Variables → Add**. Chaves e tokens **nunca** ficam no código nem no repositório.
 
    | Key | Value |
    |---|---|
-   | `akona_api_token` | **obrigatória**. Um token qualquer gerado por vocês, por exemplo a saída de `python -c "import secrets; print(secrets.token_hex(16))"` |
-   | `akona_config` | opcional. O JSON de `akona_config` em [`airflow/variables.example.json`](airflow/variables.example.json) (coordenadas, código IBGE etc.) |
+   | `akona_api_token` | **obrigatória**. Token da API de chamados (simulada): qualquer valor aleatório, ex.: saída de `python -c "import secrets; print(secrets.token_hex(16))"` |
+   | `akona_databricks_host` | **obrigatória**. URL do workspace, ex.: `https://dbc-xxxxxxxx-xxxx.cloud.databricks.com` |
+   | `akona_databricks_token` | **obrigatória**. Token de acesso pessoal do Databricks (fica mascarado no Airflow) |
+   | `akona_lakehouse_automatico` | `false` durante a carga inicial; `true` depois, para a coleta diária disparar o lakehouse |
+   | `akona_config` | opcional. O JSON de `akona_config` em [`airflow/variables.example.json`](airflow/variables.example.json) |
    | `akona_webhook_secret` | opcional. URL de um webhook do Discord para receber as notificações |
 
-3. Em **Dags**, ative (unpause) o DAG **`akona_coleta_diaria`**. Com `catchup=True`, o Airflow executa um dia de
-   cada vez desde 01/10/2026 (cerca de 20 minutos) e depois segue todo dia às 06:00.
-4. Os arquivos aparecem em `chegada/clima`, `chegada/ibge` e `chegada/chamados`, com a data no nome.
-5. Para parar sem perder o histórico: `docker compose stop` (evite `docker compose down`).
+3. **Coleta:** ative o DAG **`akona_coleta_diaria`**. Com `catchup=True`, ele executa um dia de cada vez desde
+   01/10/2026 e depois segue todo dia às 06:00. Os arquivos aparecem em `chegada/`.
+4. **Carga inicial no Databricks:** ative o DAG **`akona_lakehouse`** e use **Trigger → com configuração** três vezes,
+   esperando cada uma terminar:
 
-### 2. Lakehouse no Databricks Free Edition
+   | Execução | `de` | `ate` | `lote` | Resultado esperado |
+   |---|---|---|---|---|
+   | 1 | 2026-10-01 | 2026-10-31 | `lote_1` | envia os arquivos de outubro e cria Bronze, Prata e Ouro |
+   | 2 | 2026-11-01 | 2026-11-17 | `lote_2` | envia só os arquivos de novembro; a Bronze cresce e o MERGE atualiza status |
+   | 3 | 2026-10-01 | 2026-11-17 | `reexecucao` | 0 arquivos enviados e 0 linhas novas na Bronze (prova de idempotência) |
 
-1. Importe os arquivos de `databricks/` (**Workspace → Import**) ou clone o repositório em **Workspace → Create → Git folder**.
-2. Rode **`00_setup`** (cria `workspace.akona`, o Volume `chegada` e as pastas `chamados/`, `clima/` e `ibge/`).
-3. **Lote 1:** em **Catalog → workspace → akona → Volumes → chegada**, envie os arquivos de **outubro** de cada fonte
-   para a pasta correspondente (**Upload to this volume**).
-   - Rode **`01_bronze_autoloader`** com o widget `lote = lote_1`.
-   - Rode **`02_prata`**.
-   - Rode **`03_ouro`**, preenchendo o widget `salt_lgpd` com um segredo de 12 ou mais caracteres (não salve no repositório).
-4. **Lote 2:** envie os arquivos de **novembro**.
-   - Rode `01_bronze_autoloader` com `lote = lote_2`.
-   - Rode `01_bronze_autoloader` **de novo** com `lote = reexecucao`. Deve dar 0 linhas novas: isso prova que não há duplicação.
-   - Rode `02_prata`, `03_ouro` e **`04_consultas_mvp`**.
-5. **Tela do MVP:** siga [`docs/dashboard_mvp.md`](docs/dashboard_mvp.md).
+5. Mude `akona_lakehouse_automatico` para `true`. A partir daí, cada coleta diária envia o dia e atualiza as camadas.
+6. **Tela do MVP:** siga [`docs/dashboard_mvp.md`](docs/dashboard_mvp.md).
+7. Para parar sem perder o histórico: `docker compose stop` (evite `docker compose down`).
 
 ## Camadas
 
 ### Bronze: incremental e sem duplicação
 - Auto Loader (`cloudFiles`, JSON, `trigger(availableNow=True)`) com schema e checkpoint em `chegada/_controle/`.
 - Colunas de linhagem: `arquivo_origem` (`_metadata.file_path`) e `carregado_em`.
-- `controle_cargas_bronze` registra, a cada execução, as linhas e arquivos **antes e depois**.
+- `controle_cargas_bronze` registra, a cada execução, o lote e as linhas e arquivos **antes e depois**.
 
 ### Prata: tratamento, regras de qualidade e MERGE
 
@@ -208,9 +224,10 @@ erDiagram
 
 ## LGPD
 
-- **Na Ouro não existe dado pessoal em claro.** O CPF vira `sha2(salt + cpf, 256)` (pseudonimização). O *salt* é um
-  segredo digitado no widget do notebook e nunca vai para o repositório: sem ele, daria para descobrir o CPF testando
-  os cerca de 10⁹ CPFs possíveis.
+- **Na Ouro não existe dado pessoal em claro.** O CPF vira `sha2(salt + cpf, 256)` (pseudonimização). O *salt* fica no
+  **Databricks Secrets** (escopo `akona`, chave `salt_lgpd`): é gerado aleatoriamente pelo Airflow na primeira carga,
+  ninguém vê o valor e ele nunca vai para o repositório. Sem salt, daria para descobrir o CPF testando os cerca de 10⁹
+  CPFs possíveis.
 - Nome e telefone ficam **mascarados** (`M**** S****`, `(11) *****-4321`). E-mail e número da casa **não entram** na
   Ouro e as coordenadas são arredondadas para 3 casas decimais (cerca de 100 m).
 - A Prata guarda os dados pessoais (fictícios) para tratamento e é de acesso restrito à equipe de dados.
@@ -236,27 +253,28 @@ O MVP lê **uma única tabela**: `workspace.akona.ouro_mvp_painel_chamados`, atu
 |---|---|---|
 | 01 | 2+ fontes, 1 externa | Open-Meteo e IBGE (externas) + chamados simulados |
 | 02 | DAG agendado gravando em `chegada/` com data no nome | `dags/akona_coleta_diaria.py` (`0 6 * * *`, catchup) |
-| 03 | 2 tarefas em paralelo, conferência, chaves em Variables | `coletar_clima` ∥ `coletar_ibge`, `conferir_chegada`, `akona_api_token` |
-| 04 | 2+ lotes de dias diferentes no Volume | lote 1 (outubro) e lote 2 (novembro) |
-| 05 | Bronze incremental sem duplicar | `01_bronze_autoloader.py` + `controle_cargas_bronze` |
-| 06 | Prata: tipos, nulos, MERGE, 3+ regras com contagem | `02_prata.py` + `controle_qualidade` |
-| 07 | Ouro: 1 fato, 2+ dimensões, 5 consultas (1 de impacto) | `03_ouro.py` + `04_consultas_mvp.sql` |
+| 03 | 2 tarefas em paralelo, conferência, chaves em Variables | `coletar_clima` ∥ `coletar_ibge`, `conferir_chegada`, tokens em Variables |
+| 04 | 2+ lotes de dias diferentes no Volume | `dags/akona_lakehouse.py`: lote 1 (outubro), lote 2 (novembro) e cargas diárias |
+| 05 | Bronze incremental sem duplicar | `databricks/01_bronze_autoloader.py` + `controle_cargas_bronze` |
+| 06 | Prata: tipos, nulos, MERGE, 3+ regras com contagem | `databricks/02_prata.py` + `controle_qualidade` |
+| 07 | Ouro: 1 fato, 2+ dimensões, 5 consultas (1 de impacto) | `databricks/03_ouro.py` + `databricks/04_consultas_mvp.sql` |
 | 08 | LGPD na Ouro + tabela e tela do MVP | `ouro_dim_cidadao`, `ouro_mvp_painel_chamados`, `docs/dashboard_mvp.md` |
 | 09 | README com integrantes, arquitetura e passo a passo | este arquivo |
 
 ## Problemas comuns
 
-- **`CERTIFICATE_VERIFY_FAILED` no log de `coletar_clima` ou `coletar_ibge`:** um antivírus que inspeciona HTTPS
-  (ex.: Norton Web/Mail Shield) está trocando o certificado. Gere um pacote com as autoridades confiáveis do Windows
-  e aponte o container para ele:
+- **Abrir a interface:** use `http://127.0.0.1:8080`. Em algumas máquinas `localhost` tenta IPv6 e não responde.
+- **`CERTIFICATE_VERIFY_FAILED` nas coletas:** um antivírus que inspeciona HTTPS (ex.: Norton Web/Mail Shield) está
+  trocando o certificado. Gere um pacote com as autoridades confiáveis do Windows e aponte o container para ele:
   ```powershell
   New-Item -ItemType Directory -Force certs | Out-Null
   Get-ChildItem Cert:\LocalMachine\Root, Cert:\CurrentUser\Root | ForEach-Object { "-----BEGIN CERTIFICATE-----`n" + [Convert]::ToBase64String($_.RawData, 'InsertLineBreaks') + "`n-----END CERTIFICATE-----" } | Set-Content -Encoding ascii certs\ca-bundle.pem
   Set-Content -Encoding ascii .env "AKONA_CA_BUNDLE=/opt/airflow/certs/ca-bundle.pem"
   docker compose up -d
   ```
-  Depois, em **Grid**, selecione as tarefas que falharam e clique em **Clear** para rodar de novo.
-  (`certs/` e `.env` estão no `.gitignore`.)
+  Depois, em **Grid**, selecione as tarefas que falharam e clique em **Clear**. (`certs/` e `.env` estão no `.gitignore`.)
+- **Uma camada falhou no `akona_lakehouse`:** o log da tarefa traz o erro do notebook e o link da execução no
+  Databricks (Workflows → Job runs). Corrija o notebook em `databricks/`, e na próxima execução o Airflow publica a
+  versão nova.
 - **DAG não aparece:** `docker compose exec airflow airflow dags list-import-errors`.
 - **`simular_chamados` falha com "Crie a Variable":** falta a Variable `akona_api_token`.
-- **Bronze avisa "nenhum arquivo .json":** a pasta daquela fonte no Volume ainda está vazia. Envie o lote antes de rodar.
