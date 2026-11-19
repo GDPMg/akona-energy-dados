@@ -1,12 +1,6 @@
 {
-  "akona_config": {
-    "municipio": "Osasco",
-    "cod_ibge": "3534401",
-    "latitude": -23.5325,
-    "longitude": -46.7917,
-    "timezone": "America/Sao_Paulo",
-    "openmeteo_url": "https://api.open-meteo.com/v1/forecast",
-    "inicio_simulacao": "2026-10-01"
-  },
-  "akona_api_token": "TROQUE-POR-UM-TOKEN-ALEATORIO"
+  "akona_api_token": "TROQUE-POR-UM-TOKEN-ALEATORIO",
+  "akona_databricks_host": "https://dbc-xxxxxxxx-xxxx.cloud.databricks.com",
+  "akona_databricks_token": "TROQUE-PELO-SEU-TOKEN-DO-DATABRICKS",
+  "akona_execucao_diaria": "true"
 }

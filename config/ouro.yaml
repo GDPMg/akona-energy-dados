@@ -1,0 +1,14 @@
+# Camada Ouro: cada tabela é um notebook SQL em databricks/ouro/<nome>.sql e vira a tabela workspace.akona.ouro_<nome>.
+# A DAG akona_ouro cria uma tarefa por tabela e respeita depende_de (tabelas da Ouro que precisam existir antes).
+# Para criar uma tabela nova: escreva databricks/ouro/<nome>.sql e acrescente um item aqui.
+
+tabelas:
+  - nome: dim_tipo_problema
+  - nome: dim_tempo
+  - nome: dim_clima
+  - nome: dim_bairro
+  - nome: dim_cidadao
+  - nome: fato_chamados
+    depende_de: [dim_bairro, dim_tipo_problema]
+  - nome: mvp_painel_chamados
+    depende_de: [fato_chamados, dim_tempo, dim_clima, dim_bairro, dim_tipo_problema, dim_cidadao]

@@ -1,6 +1,6 @@
 -- Databricks notebook source
 -- MAGIC %md
--- MAGIC # Akona Energy · 04 · As 5 consultas do MVP
+-- MAGIC # Akona Energy · as 5 consultas do MVP
 -- MAGIC
 -- MAGIC Cada consulta responde a uma pergunta que o MVP mostra para a gestão (prefeitura e distribuidora).
 -- MAGIC Todas usam o modelo estrela da Ouro: `ouro_fato_chamados` + dimensões.
@@ -13,7 +13,11 @@
 -- MAGIC | 4 | Chuva e vento aumentam os chamados de queda de energia? | fato + dim_clima + dim_tipo_problema |
 -- MAGIC | 5 | **Impacto:** quantos moradores são afetados por problemas não resolvidos? | fato + dim_tipo_problema + dim_bairro (IBGE) |
 -- MAGIC
--- MAGIC "Abertos" ou "não resolvidos" = status `aberto` ou `em_andamento`.
+-- MAGIC "Abertos" ou "não resolvidos" = status `aberto` ou `em_andamento`. Executado pela DAG `akona_consultas`.
+
+-- COMMAND ----------
+
+SET TIME ZONE 'America/Sao_Paulo';
 
 -- COMMAND ----------
 

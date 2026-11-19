@@ -1,0 +1,25 @@
+# Fonte: clima horário de Osasco (API pública Open-Meteo, sem chave)
+# Gera a DAG akona_clima: API -> chegada/clima/clima_AAAA-MM-DD.json -> Volume -> bronze_clima -> prata_clima_horario
+
+nome: clima
+descricao: Clima horário de Osasco (Open-Meteo)
+extrator: http                     # http = chamada de API genérica (include/akona/apis.py)
+depende_de: []                     # fontes que precisam ser coletadas antes desta
+
+requisicoes:                       # uma requisição = o arquivo do dia é a resposta bruta da API
+  - nome: clima
+    url: https://api.open-meteo.com/v1/forecast
+    parametros:
+      latitude: "{latitude}"
+      longitude: "{longitude}"
+      start_date: "{dia}"
+      end_date: "{dia}"
+      timezone: "{timezone}"
+      hourly: precipitation,wind_speed_10m,wind_gusts_10m,temperature_2m,weather_code
+
+bronze:
+  formato: json
+
+prata:
+  notebook: prata/prata_clima      # notebook em databricks/ (sem extensão)
+  tabela: prata_clima_horario

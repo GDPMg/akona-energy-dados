@@ -46,10 +46,12 @@ Este trabalho entrega o **componente de Dados** do MVP. A tela do MVP é um pain
 
 *Figura 1 – Fluxo de dados do Akona Energy: as fontes são coletadas pelo Airflow para a pasta chegada/, enviadas em lotes ao Volume do Databricks e tratadas nas camadas Bronze, Prata e Ouro até a tela do MVP, tudo orquestrado pelo Airflow.*
 
-O Airflow roda em Docker no computador da equipe com dois DAGs. O `akona_coleta_diaria` grava os arquivos na pasta
-`chegada/`. O `akona_lakehouse` publica os notebooks do repositório no workspace, envia os arquivos ao Volume
-`workspace.akona.chegada` pela API de arquivos do Databricks e dispara, um a um, os notebooks de cada camada, que rodam
-**no Databricks** (serverless). O Auto Loader carrega a Bronze, a Prata trata e valida, a Ouro organiza em modelo
+O Airflow roda em Docker no computador da equipe, com **uma DAG por processo**. Cada fonte tem a sua DAG
+(`akona_clima`, `akona_ibge` e `akona_chamados`), que cobre o processo inteiro até a Prata: chama a API, grava o arquivo
+do dia em `chegada/`, confere a chegada, envia o arquivo ao Volume `workspace.akona.chegada` (API de arquivos do
+Databricks) e dispara os notebooks de Bronze e Prata, que rodam **no Databricks** (serverless). A DAG `akona_ouro` cria
+as dimensões, a fato e a tabela do MVP, e a `akona_consultas` roda as análises. A **`trigger-master`** dispara todas na
+ordem certa: clima e IBGE em paralelo, depois chamados (que usa o clima do dia), depois Ouro e consultas. O Auto Loader carrega a Bronze, a Prata trata e valida, a Ouro organiza em modelo
 estrela e protege os dados pessoais, e o painel AI/BI lê só a tabela-contrato `ouro_mvp_painel_chamados`.
 
 **Decisão de projeto:** o enunciado sugere enviar os arquivos ao Volume pela interface. Automatizamos esse envio com o
@@ -80,39 +82,43 @@ de moradores por domicílio (2,78 no Censo 2022), usadas para estimar quantos mo
 *Figura 2 – Amostras das três fontes no repositório.*
 
 ### Requisito 02 · DAG agendado gravando na pasta chegada/
-O DAG `akona_coleta_diaria` está agendado para todo dia às 06:00 (`0 6 * * *`) e coleta o dia anterior. Com
-`catchup=True` e início em 02/10/2026, o Airflow executou um dia de cada vez desde 01/10. Cada execução grava um arquivo
-por fonte com a data no nome, por exemplo `clima_2026-10-05.json`.
+A `trigger-master` está agendada para todo dia às 06:00 (`0 6 * * *`) e dispara as DAGs de fonte para coletar o dia
+anterior; com os parâmetros `de` e `ate`, ela também carrega um período inteiro (foi assim que os lotes foram feitos).
+A tarefa `coletar_api` de cada fonte grava **um arquivo por coleta, com a data no nome**
+(`chegada/<fonte>/<fonte>_AAAA-MM-DD.json`, ex.: `clima_2026-10-05.json`). A coleta é idempotente: dia que já tem
+arquivo não chama a API de novo. As URLs e os parâmetros de cada API ficam em `config/fontes/<fonte>.yaml`, e todas as
+chamadas estão num único arquivo (`include/akona/apis.py`).
 
 [PRINT: a pasta `chegada/` aberta no Explorer, mostrando os arquivos datados das três subpastas]
 *Figura 3 – Arquivos gravados pelo DAG em chegada/, um por fonte e por dia de coleta.*
 
 ### Requisito 03 · Paralelismo, conferência da chegada e chaves fora do código
-`coletar_clima` e `coletar_ibge` rodam **em paralelo** depois de `inicio` (na visão Gantt as duas começam no mesmo
-segundo). `simular_chamados` espera o clima, porque usa a chuva do dia. A tarefa `conferir_chegada` verifica se os três
-arquivos do dia existem, não estão vazios e são JSON válido; se faltar algum, ela falha e o `on_failure_callback`
-dispara a notificação. No fim, `notificar` registra o resumo (e envia ao Discord, se o webhook estiver configurado).
-No DAG `akona_lakehouse`, `publicar_notebooks` e `preparar_databricks` também rodam em paralelo. Os tokens (API de
+Na `trigger-master`, as DAGs `akona_clima` e `akona_ibge` rodam **em paralelo**; `akona_chamados` espera o clima,
+porque usa a chuva do dia. Dentro de cada DAG de fonte, `coletar_api`, `preparar_databricks` e `publicar_notebooks` também
+rodam em paralelo, e na `akona_ouro` as 5 dimensões são criadas ao mesmo tempo. A tarefa `conferir_chegada` verifica se
+o arquivo de cada dia existe, não está vazio e é JSON válido; se faltar algum, ela falha e o `on_failure_callback`
+dispara a notificação. No fim, a tarefa `notificar` da `trigger-master` registra o resumo (e envia ao Discord, se o
+webhook estiver configurado). Os tokens (API de
 chamados e Databricks) ficam em Variables (`akona_api_token`, `akona_databricks_token`), que o Airflow mascara na tela;
 nada sensível aparece no código ou no repositório.
 
-[PRINT: visão Gantt de uma execução da coleta, com coletar_clima e coletar_ibge lado a lado]
-*Figura 4 – Gantt: coletar_clima e coletar_ibge executando em paralelo.*
+[PRINT: visão Gantt da trigger-master (lote_1), com akona_clima e akona_ibge lado a lado]
+*Figura 4 – Gantt: as DAGs de clima e IBGE executando em paralelo.*
 
 [PRINT: Admin → Variables com akona_api_token e akona_databricks_token mascaradas]
 *Figura 4b – Variables do Airflow: tokens fora do código e mascarados.*
 
-[PRINT: log da tarefa notificar mostrando a mensagem "coleta de AAAA-MM-DD concluída"]
+[PRINT: log da tarefa notificar da trigger-master mostrando a mensagem "trigger-master concluída"]
 *Figura 5 – Notificação de sucesso registrada pela tarefa notificar.*
 
 ### Requisito 04 · Dois ou mais lotes enviados ao Volume
-Os arquivos foram enviados ao Volume `workspace.akona.chegada` pelo DAG `akona_lakehouse` (tarefa `enviar_ao_volume`,
-API de arquivos do Databricks) em lotes de dias de coleta diferentes: **lote 1** com os dias de outubro (01/10 a 31/10,
+Os arquivos foram enviados ao Volume `workspace.akona.chegada` pela tarefa `enviar_ao_volume` de cada DAG de fonte
+(API de arquivos do Databricks) em lotes de dias de coleta diferentes: **lote 1** com os dias de outubro (01/10 a 31/10,
 **93 arquivos**: 31 por fonte) e **lote 2** com os dias de novembro (01/11 a 17/11, **51 arquivos**). Uma terceira
 execução (**reexecucao**, 01/10 a 17/11) não enviou nenhum arquivo: os **144** já estavam no Volume. A partir daí, cada
 coleta diária dispara o envio daquele dia.
 
-[PRINT: log da tarefa enviar_ao_volume do lote 2 mostrando "total_enviados" e "ja_existiam"]
+[PRINT: log da tarefa enviar_ao_volume da akona_chamados no lote 2 mostrando "enviados" e "ja_existiam"]
 *Figura 6 – Envio do lote 2 ao Volume pelo Airflow.*
 
 [PRINT: Catalog → Volumes → chegada → chamados mostrando arquivos de outubro e novembro]
@@ -123,7 +129,7 @@ O Auto Loader (`cloudFiles`, `trigger(availableNow=True)`) guarda no checkpoint 
 entraram os arquivos novos, e rodar de novo sem arquivos novos não inseriu nenhuma linha. As contagens de cada
 execução ficam em `controle_cargas_bronze` (detalhadas na seção 7).
 
-[PRINT: resultado da consulta de controle_cargas_bronze no notebook 01]
+[PRINT: execução "akona - bronze_chamados" no Databricks: tabela de contagens antes e depois]
 *Figura 7 – Contagens da Bronze antes e depois de cada execução.*
 
 ### Requisito 06 · Prata: tratamento, MERGE e regras de qualidade
@@ -143,7 +149,7 @@ Ao todo, 99 registros foram para a quarentena `prata_chamados_rejeitados` e a Pr
 (466 resolvidos, 107 em andamento e 41 abertos). No clima (1.152 horas) e no IBGE (288 leituras), as regras não barraram
 nada, como esperado para dados oficiais; as 48 coletas do IBGE viraram só **6 indicadores** na Prata graças ao MERGE.
 
-[PRINT: resultado de "Total barrado por regra" no notebook 02]
+[PRINT: execução "akona - prata_chamados" no Databricks: total barrado por regra]
 *Figura 8 – Total barrado por cada regra de qualidade.*
 
 [PRINT: histórico do MERGE mostrando linhas inseridas e atualizadas no lote 2]
@@ -157,11 +163,12 @@ bairro (com dados do IBGE), tipo de problema e cidadão (pseudonimizado). As cin
 *Figura 10 – Modelo estrela da camada Ouro.*
 
 ### Requisito 08 · LGPD na Ouro e uso pelo MVP
-Na Ouro o CPF vira `sha2(salt + cpf, 256)`, com um salt secreto digitado no notebook (fora do repositório). Nome e
+Na Ouro o CPF vira `sha2(salt + cpf, 256)`. O salt fica no Databricks Secrets: foi gerado aleatoriamente pelo
+Airflow, ninguém vê o valor e ele não está no repositório. Nome e
 telefone ficam mascarados, e-mail e número da casa não entram e as coordenadas são arredondadas (~100 m). O MVP lê
 **somente** a tabela `ouro_mvp_painel_chamados`, que é o contrato com o produto (a tela está na seção 9).
 
-[PRINT: consulta "antes × depois" do notebook 03 (Prata × Ouro), com dados fictícios]
+[PRINT: execução "akona - verificacao_lgpd" no Databricks: antes × depois (Prata × Ouro), com dados fictícios]
 *Figura 11 – Dados pessoais na Prata (acesso restrito) e protegidos na Ouro (hash e máscara).*
 
 ### Requisito 09 · Repositório e README
@@ -174,17 +181,20 @@ estão no `.gitignore`, e as amostras usam dados fictícios.
 
 ## 6. Prints do Airflow
 
-[PRINT: visão Graph do DAG akona_coleta_diaria]
-*Figura 13 – Visão Graph: inicio → coletar_clima ∥ coletar_ibge → simular_chamados → conferir_chegada → notificar.*
+[PRINT: lista de DAGs do Airflow mostrando as 6 DAGs do projeto]
+*Figura 13 – Uma DAG por processo: trigger-master, akona_clima, akona_ibge, akona_chamados, akona_ouro e akona_consultas.*
 
-[PRINT: visão Grid com as execuções concluídas (verdes) desde 01/10]
-*Figura 14 – Visão Grid: 48 execuções diárias concluídas com sucesso (01/10 a 17/11).*
+[PRINT: visão Graph da trigger-master]
+*Figura 14 – trigger-master: akona_clima ∥ akona_ibge → akona_chamados → akona_ouro → akona_consultas → notificar.*
 
-[PRINT: visão Graph do DAG akona_lakehouse]
-*Figura 14b – DAG akona_lakehouse: publicar_notebooks ∥ preparar_databricks → enviar_ao_volume → bronze → prata → ouro → consultas → notificar.*
+[PRINT: visão Grid da trigger-master com as execuções lote_1, lote_2 e reexecucao concluídas]
+*Figura 14b – Execuções da trigger-master: lote 1, lote 2 e reexecução.*
 
-[PRINT: visão Grid do akona_lakehouse com as execuções lote_1, lote_2 e reexecucao concluídas]
-*Figura 14c – Execuções do lakehouse: lote 1, lote 2 e reexecução.*
+[PRINT: visão Graph de uma DAG de fonte (ex.: akona_ibge)]
+*Figura 14c – DAG de fonte: coletar_api → conferir_chegada → enviar_ao_volume → bronze → prata (preparar_databricks e publicar_notebooks em paralelo).*
+
+[PRINT: visão Graph da akona_ouro]
+*Figura 14e – DAG da Ouro: 5 dimensões em paralelo → fato_chamados → mvp_painel_chamados.*
 
 [PRINT: Databricks → Jobs & Pipelines → Runs, com as execuções "akona - bronze/prata/ouro/consultas" disparadas pelo Airflow]
 *Figura 14d – Execuções dos notebooks no Databricks, disparadas pelo Airflow.*
@@ -206,12 +216,12 @@ estão no `.gitignore`, e as amostras usam dados fictícios.
 O lote 2 acrescentou só os 17 dias de novembro (509 linhas de chamados), e a 2ª execução sem arquivos novos manteve
 as contagens: **a Bronze é incremental e não duplica**.
 
-[PRINT: a mesma tabela no notebook 01]
+[PRINT: a mesma tabela na execução "akona - bronze_chamados" no Databricks]
 *Figura 15 – Log controle_cargas_bronze com as três execuções.*
 
 ## 8. As 5 consultas SQL, com resultado e interpretação
 
-O SQL completo está em `databricks/04_consultas_mvp.sql`.
+O SQL completo está em `databricks/consultas/consultas_mvp.sql` (executado pela DAG `akona_consultas`).
 
 ### Consulta 1 · Quais bairros têm mais chamados abertos, e de que tipo?
 ```sql

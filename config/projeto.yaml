@@ -1,0 +1,18 @@
+# Configurações gerais do projeto Akona Energy.
+# Nada secreto aqui: tokens e senhas ficam em Airflow Variables (ver README).
+# Os valores abaixo podem ser usados nas URLs e parâmetros das fontes como {nome_do_campo}.
+
+municipio: Osasco
+uf: SP
+cod_ibge: "3534401"
+latitude: -23.5325
+longitude: -46.7917
+timezone: America/Sao_Paulo
+inicio_simulacao: "2026-10-01"      # primeiro dia de chamados simulados
+
+databricks:
+  catalogo: workspace
+  schema: akona
+  volume: chegada                   # Volume que recebe os arquivos da pasta chegada/
+  pasta_workspace: /Shared/akona    # onde o Airflow publica os notebooks da pasta databricks/
+  escopo_segredos: akona            # Databricks Secrets (guarda o salt da LGPD)

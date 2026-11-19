@@ -363,9 +363,9 @@ def _validar_token(token: str | None) -> None:
         )
 
 
-def gerar_arquivo_chamados(dia: str, pasta_chegada: Path, token: str,
-                           inicio_simulacao: str = "2026-10-01") -> tuple[Path, dict]:
-    """Gera chegada/chamados/chamados_<dia>.json (JSON Lines) e devolve (caminho, resumo)."""
+def gerar_conteudo_chamados(dia: str, pasta_chegada: Path, token: str,
+                            inicio_simulacao: str = "2026-10-01") -> tuple[str, dict]:
+    """Resposta da API simulada para o dia: conteúdo JSON Lines (um chamado por linha) e um resumo."""
     _validar_token(token)
     data = date.fromisoformat(dia)
     pasta_chegada = Path(pasta_chegada)
@@ -388,12 +388,19 @@ def gerar_arquivo_chamados(dia: str, pasta_chegada: Path, token: str,
         for r in _sujar(registro, rng):
             linhas.append(json.dumps(r, ensure_ascii=False, default=_para_json))
 
-    destino = pasta_chegada / "chamados" / f"chamados_{dia}.json"
-    _gravar_atomico(destino, "\n".join(linhas) + "\n")
     resumo = {
         "dia": dia, "novos": len(novos), "atualizacoes": atualizacoes, "linhas": len(linhas),
         "fator_clima": fator, "chuva_mm": chuva, "rajada_max_kmh": rajada,
     }
+    return "\n".join(linhas) + "\n", resumo
+
+
+def gerar_arquivo_chamados(dia: str, pasta_chegada: Path, token: str,
+                           inicio_simulacao: str = "2026-10-01") -> tuple[Path, dict]:
+    """Gera chegada/chamados/chamados_<dia>.json (usado nos testes locais pela linha de comando)."""
+    conteudo, resumo = gerar_conteudo_chamados(dia, pasta_chegada, token, inicio_simulacao)
+    destino = Path(pasta_chegada) / "chamados" / f"chamados_{dia}.json"
+    _gravar_atomico(destino, conteudo)
     return destino, resumo
 
 

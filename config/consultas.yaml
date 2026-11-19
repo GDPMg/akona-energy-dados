@@ -1,0 +1,8 @@
+# Consultas de análise: cada item é um notebook em databricks/consultas/<nome>.sql.
+# A DAG akona_consultas executa todos em paralelo, depois que a Ouro estiver pronta.
+
+notebooks:
+  - nome: consultas_mvp
+    descricao: As 5 consultas que respondem às perguntas do MVP
+  - nome: verificacao_lgpd
+    descricao: Prova de que a Ouro não tem dado pessoal em claro (antes x depois)

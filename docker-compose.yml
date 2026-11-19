@@ -1,36 +1,62 @@
-# Airflow 3 do projeto Akona Energy: 1 container em modo "standalone"
-# (api-server + scheduler + dag-processor + triggerer, LocalExecutor e SQLite).
+# Airflow 3 do projeto Akona Energy.
 #
-#   Subir:   docker compose up -d        e abrir http://localhost:8080
-#   Parar:   docker compose stop         (use "stop", NÃO "down": o "down" apaga o
-#                                         container e o histórico de execuções)
+#   Subir:   docker compose up -d        e abrir http://127.0.0.1:8080
+#   Parar:   docker compose stop         (o histórico fica no Postgres, num volume do Docker)
 #
-# Ambiente local de estudo: o login está desligado (SIMPLE_AUTH_MANAGER_ALL_ADMINS),
-# então não há senha neste arquivo. Chaves e tokens ficam em Airflow Variables.
+# - postgres: banco de metadados do Airflow. Sem senha de propósito: a porta NÃO é exposta para fora do Docker,
+#   só o container do Airflow enxerga o banco. Assim nenhuma senha fica no repositório.
+# - airflow:  modo "standalone" (api-server + scheduler + dag-processor + triggerer) com LocalExecutor.
+#   Login desligado (ambiente local de estudo). Tokens e chaves ficam em Airflow Variables.
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: akona-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_DB: airflow
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - akona-banco:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 20
+
   airflow:
     image: apache/airflow:3.3.2
     container_name: akona-airflow
     command: standalone
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow@postgres:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: America/Sao_Paulo
-      # Docker no Windows é lento para importar o Airflow: mais tempo para ler os DAGs e releitura menos frequente
+      # Docker no Windows é lento para importar o Airflow: mais tempo para ler as DAGs e releitura menos frequente
       AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "180"
       AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "120"
       AIRFLOW__DAG_PROCESSOR__DAG_FILE_PROCESSOR_TIMEOUT: "240"
+      # Código e configurações do projeto
+      PYTHONPATH: /opt/airflow/include
+      AKONA_CONFIG: /opt/akona/config
+      AKONA_NOTEBOOKS: /opt/akona/databricks
       AKONA_CHEGADA: /opt/airflow/chegada
-      AKONA_NOTEBOOKS: /opt/airflow/databricks
-      # Opcional: só quando um antivírus (ex.: Norton) intercepta HTTPS e as coletas
-      # falham com CERTIFICATE_VERIFY_FAILED. Veja "Problemas comuns" no README.
+      # Opcional: só quando um antivírus intercepta HTTPS (veja "Problemas comuns" no README)
       REQUESTS_CA_BUNDLE: ${AKONA_CA_BUNDLE:-}
     volumes:
-      - ./dags:/opt/airflow/dags
-      - ./chegada:/opt/airflow/chegada
-      - ./databricks:/opt/airflow/databricks:ro   # notebooks publicados no Databricks pelo DAG akona_lakehouse
+      - ./dags:/opt/airflow/dags                   # só definições de DAG
+      - ./include:/opt/airflow/include:ro          # código Python (apis, tarefas, padrão de DAG por fonte)
+      - ./config:/opt/akona/config:ro              # cadastros: projeto, fontes, ouro e consultas
+      - ./databricks:/opt/akona/databricks:ro      # notebooks publicados no Databricks pelas DAGs
+      - ./chegada:/opt/airflow/chegada             # pasta de pouso dos arquivos coletados
       - ./certs:/opt/airflow/certs:ro
+
+volumes:
+  akona-banco:
