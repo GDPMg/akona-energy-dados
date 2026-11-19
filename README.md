@@ -20,6 +20,21 @@ pelo Airflow, até entregar à tela do MVP o que a gestão vê.
 | Guilherme Vargas | 98278 |
 | Ryan Perez Pacheco | 98782 |
 
+## Ficha técnica do MVP
+
+| | |
+|---|---|
+| **Nome do produto** | Akona Energy |
+| **Cidadão e território** | Moradores de Osasco (SP), 728.615 habitantes (IBGE, Censo 2022), que reportam os problemas; e a gestão (prefeitura e distribuidora), que atende os chamados |
+| **Problema, em uma frase** | Postes apagados, lâmpadas piscando, fios caídos e quedas de energia demoram a ser resolvidos porque a gestão não sabe onde estão, quantas pessoas afetam e quais são mais graves, e os bairros mais afetados esperam mais |
+| **Proposta de valor** | Um canal único para o morador reportar e acompanhar o problema, e um painel para a gestão priorizar por risco e impacto, com metas de prazo, equidade entre bairros e reincidência |
+| **Arquitetura: componentes** | MVP web (Azure Container Apps) · Airflow 3 em Docker (uma DAG por processo + trigger-master) · Databricks Free Edition (Volume, Bronze, Prata e Ouro, SQL Warehouse) · repositório GitHub |
+| **Fontes de dados** | Open-Meteo, clima horário (externa, real) · IBGE, município e Censo 2022 (externa, real) · chamados do webapp (interna, simulada) · ordens de serviço da manutenção (interna, simulada) |
+| **Modelos de IA utilizados** | Nenhum no componente de Dados: a priorização e os indicadores usam regras e SQL explicáveis (score de prioridade, regras de qualidade, correlação clima × quedas) |
+| **URL do MVP e repositório** | MVP: <https://ca-akona-energy-prod.salmoncoast-770d275b.eastus2.azurecontainerapps.io/gestao> · Dados: <https://github.com/GDPMg/akona-energy-dados> |
+| **Indicadores de impacto** | Moradores afetados por problemas não resolvidos (12.345, ou 1,69% da cidade) · tempo médio de reparo (86,0 h) · % no prazo (68,5%; meta 85%) · gap de equidade (1,67; meta < 1,5) · reincidência (9,1%; meta < 10%) |
+| **ODS conectados** | ODS 7 (energia limpa e acessível) · ODS 9 (indústria, inovação e infraestrutura) · ODS 10 (redução das desigualdades) · ODS 11 (cidades e comunidades sustentáveis) |
+
 ## Perguntas que o MVP responde
 
 1. Quais bairros têm mais chamados abertos, e de que tipo?
