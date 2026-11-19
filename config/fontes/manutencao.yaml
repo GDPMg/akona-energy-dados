@@ -1,0 +1,22 @@
+# Fonte: ordens de serviço da manutenção da iluminação pública (sistema da prefeitura, simulado)
+# Gera a DAG akona_manutencao: API -> chegada/manutencao/manutencao_AAAA-MM-DD.json -> Volume
+#                              -> bronze_manutencao -> prata_manutencao
+#
+# Alimenta a tela "Painel da gestão" do MVP: coluna "Ponto" (o poste, ex.: OSC-03024) e o indicador de
+# reincidência (mesmo poste com nova ordem de serviço em até 30 dias). Ver docs/mvp_gestao.md.
+
+nome: manutencao
+descricao: Ordens de serviço da manutenção da iluminação pública (sistema da prefeitura, simulado)
+extrator: python                   # python = função própria em include/akona/apis.py
+funcao: chamar_api_manutencao
+depende_de: [chamados]             # cada ordem de serviço nasce de um chamado de iluminação do mesmo dia
+
+segredos:
+  token: akona_api_token           # token de integração com os sistemas (Airflow Variable)
+
+bronze:
+  formato: json                    # JSON Lines: uma ordem de serviço por linha
+
+prata:
+  notebook: prata/prata_manutencao
+  tabela: prata_manutencao

@@ -386,6 +386,33 @@ tabela da Ouro**, `workspace.akona.ouro_mvp_painel_chamados`.
 [PRINT: aba Data do painel mostrando o SQL com FROM workspace.akona.ouro_mvp_painel_chamados]
 *Figura 22 – Os datasets do painel leem somente a tabela-contrato da Ouro.*
 
+### 9.1 Integração com o MVP web: tela "Painel da gestão"
+
+O web app do MVP, desenvolvido por outro integrante, tem a tela **Painel da gestão** (`/gestao`) com cartões de
+indicadores, a fila de chamados não resolvidos, a tabela por bairro e as últimas 12 semanas. O pipeline tem toda a
+cadeia que alimentaria essa tela. A integração é demonstrativa: o web app usa a própria base de demonstração.
+
+- Quase tudo sai dos **chamados**, que já eram coletados: chamados abertos, tempo médio de reparo, % no prazo, gap de
+  equidade (bairro mais lento ÷ cidade), tabela por bairro e semanas.
+- O **poste** de cada chamado e a **reincidência** (mesmo poste em até 30 dias) vieram de uma **fonte nova, simulada**:
+  as ordens de serviço do sistema de manutenção da iluminação pública. Ela foi incluída seguindo o padrão do projeto:
+  `config/fontes/manutencao.yaml`, a DAG `akona_manutencao` (API → chegada → Volume → Bronze → Prata), a Prata
+  `prata_manutencao` com 3 regras de qualidade, e `dim_ponto` + `fato_manutencao` na Ouro.
+- Na Ouro, uma **view por bloco da tela** (`ouro_gestao_indicadores`, `ouro_gestao_fila`, `ouro_gestao_por_bairro` e
+  `ouro_gestao_semanal`), com os mesmos nomes de campo do endpoint `/api/indicadores` do MVP e as janelas de 30 e 90 dias
+  do filtro da tela.
+- As consultas que o web app faria estão em `databricks/consultas/consultas_gestao.sql`. A última monta o **mesmo JSON**
+  do endpoint do MVP. A linhagem completa está em `docs/mvp_gestao.md`.
+
+[PRINT: a tela /gestao do MVP web]
+*Figura 23 – Tela "Painel da gestão" do MVP web.*
+
+[PRINT: execução "akona - consultas_gestao" no Databricks: cartões, fila com o poste, por bairro e semanas]
+*Figura 24 – Os blocos da tela de gestão calculados pelas views da Ouro.*
+
+[PRINT: o resultado da consulta 5 de consultas_gestao (JSON no formato do /api/indicadores)]
+*Figura 25 – A Ouro entrega o mesmo contrato JSON que a tela do MVP consome.*
+
 ## 10. Conclusão técnica e link do repositório
 
 O pipeline cobre o ciclo completo pedido, de ponta a ponta e sem passos manuais: coleta agendada no Airflow 3 com tarefas

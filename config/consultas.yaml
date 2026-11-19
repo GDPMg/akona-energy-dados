@@ -6,3 +6,5 @@ notebooks:
     descricao: As 5 consultas que respondem às perguntas do MVP
   - nome: verificacao_lgpd
     descricao: Prova de que a Ouro não tem dado pessoal em claro (antes x depois)
+  - nome: consultas_gestao
+    descricao: Consultas que a tela Painel da gestão do MVP web usa (cartões, fila, por bairro, semanas e o JSON da API)

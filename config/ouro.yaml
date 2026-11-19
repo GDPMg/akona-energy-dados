@@ -1,8 +1,9 @@
-# Camada Ouro: cada tabela é um notebook SQL em databricks/ouro/<nome>.sql e vira a tabela workspace.akona.ouro_<nome>.
-# A DAG akona_ouro cria uma tarefa por tabela e respeita depende_de (tabelas da Ouro que precisam existir antes).
+# Camada Ouro: cada item é um notebook SQL em databricks/ouro/<nome>.sql e cria a tabela ou view workspace.akona.ouro_<nome>.
+# A DAG akona_ouro cria uma tarefa por item e respeita depende_de (itens da Ouro que precisam existir antes).
 # Para criar uma tabela nova: escreva databricks/ouro/<nome>.sql e acrescente um item aqui.
 
 tabelas:
+  # --- modelo estrela dos chamados (painel AI/BI e as 5 consultas)
   - nome: dim_tipo_problema
   - nome: dim_tempo
   - nome: dim_clima
@@ -12,3 +13,20 @@ tabelas:
     depende_de: [dim_bairro, dim_tipo_problema]
   - nome: mvp_painel_chamados
     depende_de: [fato_chamados, dim_tempo, dim_clima, dim_bairro, dim_tipo_problema, dim_cidadao]
+
+  # --- manutenção da iluminação pública (fonte manutencao)
+  - nome: dim_ponto
+  - nome: fato_manutencao
+    depende_de: [dim_bairro]
+
+  # --- views da tela "Painel da gestão" do MVP web (ver docs/mvp_gestao.md)
+  - nome: gestao_chamados_periodo
+    depende_de: [fato_chamados, dim_bairro, dim_tipo_problema]
+  - nome: gestao_indicadores
+    depende_de: [gestao_chamados_periodo, fato_manutencao]
+  - nome: gestao_por_bairro
+    depende_de: [gestao_chamados_periodo]
+  - nome: gestao_semanal
+    depende_de: [fato_chamados]
+  - nome: gestao_fila
+    depende_de: [fato_chamados, fato_manutencao, dim_bairro, dim_tipo_problema]

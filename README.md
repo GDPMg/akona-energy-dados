@@ -36,14 +36,15 @@ pelo Airflow, até entregar à tela do MVP o que a gestão vê.
 
 ```
 trigger-master (todo dia às 06:00, ou Trigger manual; as fontes rodam no modo incremental)
- ├─ akona_clima ──┐                (em paralelo)
- ├─ akona_ibge ───┼─→ akona_ouro ─→ akona_consultas
- └─ akona_chamados┘   (chamados espera o clima: o simulador usa a chuva do dia)
+ ├─ akona_clima ──┐                             (em paralelo)
+ ├─ akona_ibge ───┼─────────────────────→ akona_ouro ─→ akona_consultas
+ └─ akona_chamados ─→ akona_manutencao ┘
+    (chamados espera o clima; manutenção espera os chamados do dia)
 ```
 
 | DAG | Processo |
 |---|---|
-| `akona_clima`, `akona_ibge`, `akona_chamados` | **uma por fonte, do começo até a Prata:** `coletar_api` → `conferir_chegada` → `enviar_ao_volume` → `bronze` → `prata` (com `preparar_databricks` e `publicar_notebooks` em paralelo) |
+| `akona_clima`, `akona_ibge`, `akona_chamados`, `akona_manutencao` | **uma por fonte, do começo até a Prata:** `coletar_api` → `conferir_chegada` → `enviar_ao_volume` → `bronze` → `prata` (com `preparar_databricks` e `publicar_notebooks` em paralelo) |
 | `akona_ouro` | todas as tabelas da Ouro, **uma tarefa por tabela**: as 5 dimensões em paralelo → fato → tabela do MVP |
 | `akona_consultas` | as 5 consultas de análise do MVP e a verificação de LGPD |
 | `trigger-master` | dispara todas as outras na ordem certa, esperando cada uma terminar |
@@ -107,6 +108,7 @@ A `trigger-master` também não tem: ela só orquestra o dia a dia (modo increme
 | Chamados dos moradores | API do webapp Akona, **simulada** por [`include/akona/simulador_chamados.py`](include/akona/simulador_chamados.py) (exige token) | interna, simulada | JSON Lines (1 chamado por linha) | diária, 06:00 (dia anterior) | `chamados/chamados_AAAA-MM-DD.json` |
 | Clima de Osasco | [Open-Meteo](https://open-meteo.com/) `api.open-meteo.com/v1/forecast`: chuva, vento, rajada, temperatura e código do tempo, de hora em hora | **externa**, API pública sem chave | JSON | diária, 06:00 (dia anterior) | `clima/clima_AAAA-MM-DD.json` |
 | Município e Censo 2022 | [API do IBGE](https://servicodados.ibge.gov.br/api/docs): localidades + agregados 4714 (população, área, densidade) e 4712 (domicílios e média de moradores) | **externa**, API pública sem chave | JSON | diária (dado de referência; o MERGE mantém 1 versão) | `ibge/ibge_AAAA-MM-DD.json` |
+| Ordens de serviço da iluminação pública | sistema de manutenção da prefeitura, **simulado** por [`include/akona/simulador_manutencao.py`](include/akona/simulador_manutencao.py) a partir dos chamados de iluminação (exige token) | interna, simulada | JSON Lines (1 ordem de serviço por linha) | diária, depois dos chamados | `manutencao/manutencao_AAAA-MM-DD.json` |
 
 - **Por que simular os chamados:** o webapp ainda não existe. O simulador é determinístico (o mesmo dia gera sempre
   o mesmo arquivo), traz chamados novos **e** mudanças de status de chamados antigos, usa o **clima real** do dia como
@@ -123,6 +125,7 @@ config/                          CADASTROS (o que muda de uma fonte/tabela para 
   fontes/clima.yaml              uma fonte por arquivo: API, parâmetros, dependências, notebook da Prata
   fontes/ibge.yaml
   fontes/chamados.yaml
+  fontes/manutencao.yaml         ordens de serviço da iluminação (alimenta a tela de gestão do MVP web)
   ouro.yaml                      tabelas da Ouro e de quem cada uma depende
   consultas.yaml                 notebooks de análise
 dags/                            SÓ definição de DAG (arquivos curtos)
@@ -130,6 +133,7 @@ dags/                            SÓ definição de DAG (arquivos curtos)
   akona_clima.py                 DAG da fonte clima   (criar_dag_fonte("clima"))
   akona_ibge.py                  DAG da fonte IBGE    (criar_dag_fonte("ibge"))
   akona_chamados.py              DAG da fonte chamados (criar_dag_fonte("chamados"))
+  akona_manutencao.py            DAG da fonte manutenção (criar_dag_fonte("manutencao"))
   akona_ouro.py                  DAG da Ouro (uma tarefa por tabela de config/ouro.yaml)
   akona_consultas.py             DAG das consultas de análise
 include/akona/                   CÓDIGO reutilizável (nenhum DAG aqui)
@@ -140,18 +144,22 @@ include/akona/                   CÓDIGO reutilizável (nenhum DAG aqui)
   chegada.py                     padrão de nomes e conferência dos arquivos da pasta chegada/
   databricks_api.py              cliente da API REST do Databricks (Unity Catalog, Files, Secrets, Workspace, Jobs)
   simulador_chamados.py          API de chamados simulada (só biblioteca padrão do Python)
+  simulador_manutencao.py        API do sistema de manutenção simulada (ordens de serviço por poste)
   notificacao.py                 notificações (log da tarefa + webhook opcional do Discord)
 databricks/                      notebooks executados no Databricks pelas DAGs
   comum/funcoes.py               funções compartilhadas por Bronze e Prata (%run): normalização, regras, MERGE
   bronze/bronze_autoloader.py    Bronze GENÉRICA (parâmetro fonte): Auto Loader + contagens antes e depois
   prata/prata_<fonte>.py         uma Prata por fonte (+ _modelo_prata.py para fontes novas)
-  ouro/<tabela>.sql              uma tabela da Ouro por arquivo (dimensões, fato e tabela do MVP)
+  ouro/<tabela>.sql              uma tabela da Ouro por arquivo (dimensões, fatos e tabela do MVP)
+  ouro/gestao_*.sql              views da tela "Painel da gestão" do MVP web
   consultas/consultas_mvp.sql    as 5 consultas do MVP
   consultas/verificacao_lgpd.sql prova de que a Ouro não tem dado pessoal em claro
+  consultas/consultas_gestao.sql as consultas que a tela de gestão do MVP web faria (e o JSON da API)
 amostras/                        um arquivo de cada fonte (dados pessoais 100% fictícios)
 airflow/variables.example.json   modelo das Variables (sem segredo)
 docs/
   como_adicionar_fonte.md        o padrão para incluir uma fonte/tabela nova
+  mvp_gestao.md                  integração com o MVP web: tela de gestão, linhagem e dados simulados
   dashboard_mvp.md               roteiro da tela do MVP (painel AI/BI)
   relatorio_modelo.md            modelo do relatório em PDF, na ordem pedida
   img/arquitetura.svg / .png     diagrama do fluxo de dados
@@ -316,6 +324,24 @@ O MVP lê **uma única tabela**: `workspace.akona.ouro_mvp_painel_chamados`, atu
 | `posicao_fila`, `prioridade_score`, `horas_em_aberto` | tabela "Fila de prioridade" |
 | `solicitante`, `contato` | fila, sempre mascarados |
 | `data_abertura`, `chuva_no_dia_mm`, `condicao_clima` | gráfico "Rede elétrica × chuva por dia" |
+
+## Integração com o MVP web (tela "Painel da gestão")
+
+O web app do MVP (feito por outro integrante) tem a tela
+[`/gestao`](https://ca-akona-energy-prod.salmoncoast-770d275b.eastus2.azurecontainerapps.io/gestao). O pipeline tem toda
+a cadeia que a alimentaria: uma **fonte nova simulada** (ordens de serviço da manutenção, que trazem o **poste** e a
+**reincidência**) e as **views da Ouro** com os mesmos campos do endpoint `/api/indicadores` do MVP. A integração é
+demonstrativa: o web app não está ligado ao Databricks.
+
+| Bloco da tela | View da Ouro |
+|---|---|
+| Cartões: abertos, tempo médio de reparo, no prazo, gap de equidade, reincidência | `ouro_gestao_indicadores` |
+| Fila de chamados não resolvidos (com o poste) | `ouro_gestao_fila` |
+| Por bairro | `ouro_gestao_por_bairro` |
+| Últimas 12 semanas | `ouro_gestao_semanal` |
+
+Linhagem completa, geração dos dados simulados e como conferir: [docs/mvp_gestao.md](docs/mvp_gestao.md).
+Consultas que o web app faria: [databricks/consultas/consultas_gestao.sql](databricks/consultas/consultas_gestao.sql).
 
 ## Requisitos do enunciado → onde estão
 

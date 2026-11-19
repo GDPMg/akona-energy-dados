@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 from akona.simulador_chamados import gerar_conteudo_chamados
+from akona.simulador_manutencao import gerar_conteudo_os
 
 TIMEOUT_PADRAO = 30
 
@@ -70,6 +71,15 @@ def chamar_api_akona(fonte: dict, dia: str, contexto: dict) -> str:
     conteudo, _ = gerar_conteudo_chamados(
         dia, Path(contexto["pasta_chegada"]), token=contexto.get("token"),
         inicio_simulacao=contexto["inicio_simulacao"])
+    return conteudo
+
+
+def chamar_api_manutencao(fonte: dict, dia: str, contexto: dict) -> str:
+    """API do sistema de manutenção da iluminação pública (ordens de serviço por poste). Enquanto o sistema não
+    existe, a resposta vem do simulador (include/akona/simulador_manutencao.py), que exige o token de integração."""
+    if not contexto.get("token") or str(contexto["token"]).upper().startswith("TROQUE"):
+        raise PermissionError("Token de integração ausente. Crie a Variable 'akona_api_token' no Airflow.")
+    conteudo, _ = gerar_conteudo_os(dia, Path(contexto["pasta_chegada"]))
     return conteudo
 
 

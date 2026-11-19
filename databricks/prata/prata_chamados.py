@@ -17,11 +17,6 @@
 
 TIPOS = ["fio_caido", "queda_energia", "poste_apagado", "lampada_piscando"]
 STATUS = ["aberto", "em_andamento", "resolvido"]
-BAIRROS_OSASCO = [
-    "Centro", "Vila Yara", "Presidente Altino", "Bela Vista", "Jaguaribe", "Km 18",
-    "Quitaúna", "Rochdale", "Novo Osasco", "Pestana", "Bonfim", "Vila Campesina",
-    "Jardim das Flores", "Munhoz Júnior", "Santo Antônio", "Ayrosa",
-]
 LAT_MIN, LAT_MAX, LON_MIN, LON_MAX = -23.58, -23.47, -46.84, -46.73   # retângulo que contém Osasco
 
 # COMMAND ----------
@@ -31,10 +26,7 @@ LAT_MIN, LAT_MAX, LON_MIN, LON_MAX = -23.58, -23.47, -46.84, -46.73   # retângu
 
 # COMMAND ----------
 
-ref_bairros = (
-    spark.createDataFrame([(b,) for b in BAIRROS_OSASCO], "bairro_oficial STRING")
-    .withColumn("bairro_chave", chave(F.col("bairro_oficial")))
-)
+ref_bairros = referencia_bairros()          # lista oficial de bairros (comum/funcoes)
 
 tratado = (
     spark.table(f"{S}.bronze_chamados")

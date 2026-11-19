@@ -17,6 +17,13 @@ CATALOGO, SCHEMA, VOLUME = "workspace", "akona", "chegada"
 S = f"{CATALOGO}.{SCHEMA}"
 BASE_VOLUME = f"/Volumes/{CATALOGO}/{SCHEMA}/{VOLUME}"
 
+# Bairros de Osasco atendidos (referência usada pelas Pratas de chamados e de manutenção)
+BAIRROS_OSASCO = [
+    "Centro", "Vila Yara", "Presidente Altino", "Bela Vista", "Jaguaribe", "Km 18",
+    "Quitaúna", "Rochdale", "Novo Osasco", "Pestana", "Bonfim", "Vila Campesina",
+    "Jardim das Flores", "Munhoz Júnior", "Santo Antônio", "Ayrosa",
+]
+
 for _conf, _valor in [("spark.sql.session.timeZone", "America/Sao_Paulo"),     # horários de Brasília
                       ("spark.sql.legacy.timeParserPolicy", "CORRECTED")]:   # data ilegível vira NULL
     try:
@@ -63,6 +70,12 @@ def chave(coluna):
 def para_timestamp(nome: str, formatos=("yyyy-MM-dd HH:mm:ss", "dd/MM/yyyy HH:mm")):
     """Tenta cada formato; valor ilegível vira NULL (try_to_timestamp não quebra com ANSI ligado)."""
     return F.coalesce(*[F.expr(f"try_to_timestamp({nome}, '{formato}')") for formato in formatos])
+
+
+def referencia_bairros():
+    """DataFrame (bairro_oficial, bairro_chave) para normalizar o bairro com um join pela chave."""
+    return (spark.createDataFrame([(b,) for b in BAIRROS_OSASCO], "bairro_oficial STRING")
+            .withColumn("bairro_chave", chave(F.col("bairro_oficial"))))
 
 
 def fora(coluna: str, minimo, maximo):
