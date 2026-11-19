@@ -106,9 +106,9 @@ nada sensível aparece no código ou no repositório.
 ### Requisito 04 · Dois ou mais lotes enviados ao Volume
 Os arquivos foram enviados ao Volume `workspace.akona.chegada` pelo DAG `akona_lakehouse` (tarefa `enviar_ao_volume`,
 API de arquivos do Databricks) em lotes de dias de coleta diferentes: **lote 1** com os dias de outubro (01/10 a 31/10,
-[n] arquivos) e **lote 2** com os dias de novembro (01/11 a 17/11, [n] arquivos). Uma terceira execução
-(**reexecucao**, 01/10 a 17/11) não enviou nenhum arquivo, porque todos já estavam no Volume. A partir daí, cada coleta
-diária dispara o envio daquele dia.
+**93 arquivos**: 31 por fonte) e **lote 2** com os dias de novembro (01/11 a 17/11, **51 arquivos**). Uma terceira
+execução (**reexecucao**, 01/10 a 17/11) não enviou nenhum arquivo: os **144** já estavam no Volume. A partir daí, cada
+coleta diária dispara o envio daquele dia.
 
 [PRINT: log da tarefa enviar_ao_volume do lote 2 mostrando "total_enviados" e "ja_existiam"]
 *Figura 6 – Envio do lote 2 ao Volume pelo Airflow.*
@@ -130,18 +130,22 @@ bairro (ex.: "Queda de energia" → `queda_energia`), aceita datas em dois forma
 mediana do tipo; canal vira `nao_informado`). Antes do `MERGE` pela chave `id_chamado`, os registros são deduplicados, e
 o MERGE só atualiza um chamado quando o registro novo é mais recente: é assim que as mudanças de status do lote 2 entram.
 
-| Regra | Barra quando | Barrados |
+| Regra | Barra quando | Barrados (de 1.426 registros) |
 |---|---|---|
-| R1_obrigatorios | id, tipo ou data de abertura nulo ou ilegível | [n] |
-| R2_dominio | tipo ou status fora dos valores aceitos | [n] |
-| R3_localizacao | bairro fora de Osasco ou GPS fora do município | [n] |
-| R4_datas_coerentes | resolução anterior à abertura | [n] |
+| R1_obrigatorios | id, tipo ou data de abertura nulo ou ilegível | 31 |
+| R2_dominio | tipo ou status fora dos valores aceitos | 26 |
+| R3_localizacao | bairro fora de Osasco ou GPS fora do município | 33 |
+| R4_datas_coerentes | resolução anterior à abertura | 9 |
+
+Ao todo, 99 registros foram para a quarentena `prata_chamados_rejeitados` e a Prata ficou com **614 chamados** válidos
+(466 resolvidos, 107 em andamento e 41 abertos). No clima (1.152 horas) e no IBGE (288 leituras), as regras não barraram
+nada, como esperado para dados oficiais; as 48 coletas do IBGE viraram só **6 indicadores** na Prata graças ao MERGE.
 
 [PRINT: resultado de "Total barrado por regra" no notebook 02]
 *Figura 8 – Total barrado por cada regra de qualidade.*
 
 [PRINT: histórico do MERGE mostrando linhas inseridas e atualizadas no lote 2]
-*Figura 9 – MERGE da Prata: no lote 2, [n] chamados foram atualizados (mudança de status) e [n] inseridos.*
+*Figura 9 – MERGE da Prata: o lote 1 inseriu 403 chamados; no lote 2, 211 foram inseridos e 45 atualizados (mudança de status); a reexecução não inseriu nem atualizou nada.*
 
 ### Requisito 07 · Ouro dimensional e 5 consultas
 A Ouro é um modelo estrela com a fato `ouro_fato_chamados` (1 linha por chamado) e cinco dimensões: tempo, clima,
@@ -172,7 +176,7 @@ estão no `.gitignore`, e as amostras usam dados fictícios.
 *Figura 13 – Visão Graph: inicio → coletar_clima ∥ coletar_ibge → simular_chamados → conferir_chegada → notificar.*
 
 [PRINT: visão Grid com as execuções concluídas (verdes) desde 01/10]
-*Figura 14 – Visão Grid: [n] execuções diárias concluídas com sucesso.*
+*Figura 14 – Visão Grid: 48 execuções diárias concluídas com sucesso (01/10 a 17/11).*
 
 [PRINT: visão Graph do DAG akona_lakehouse]
 *Figura 14b – DAG akona_lakehouse: publicar_notebooks ∥ preparar_databricks → enviar_ao_volume → bronze → prata → ouro → consultas → notificar.*
@@ -187,18 +191,18 @@ estão no `.gitignore`, e as amostras usam dados fictícios.
 
 | Execução | Fonte | Linhas antes | Linhas depois | Linhas novas | Arquivos depois |
 |---|---|---|---|---|---|
-| lote_1 | chamados | 0 | [n] | [n] | [n] |
-| lote_2 | chamados | [n] | [n] | [n] | [n] |
-| reexecucao | chamados | [n] | [n] | **0** | [n] |
-| lote_1 | clima | 0 | [n] | [n] | [n] |
-| lote_2 | clima | [n] | [n] | [n] | [n] |
-| reexecucao | clima | [n] | [n] | **0** | [n] |
-| lote_1 | ibge | 0 | [n] | [n] | [n] |
-| lote_2 | ibge | [n] | [n] | [n] | [n] |
-| reexecucao | ibge | [n] | [n] | **0** | [n] |
+| lote_1 | chamados | 0 | 917 | 917 | 31 |
+| lote_2 | chamados | 917 | 1.426 | 509 | 48 |
+| reexecucao | chamados | 1.426 | 1.426 | **0** | 48 |
+| lote_1 | clima | 0 | 31 | 31 | 31 |
+| lote_2 | clima | 31 | 48 | 17 | 48 |
+| reexecucao | clima | 48 | 48 | **0** | 48 |
+| lote_1 | ibge | 0 | 31 | 31 | 31 |
+| lote_2 | ibge | 31 | 48 | 17 | 48 |
+| reexecucao | ibge | 48 | 48 | **0** | 48 |
 
-O lote 2 acrescentou só os arquivos de novembro, e a 2ª execução sem arquivos novos manteve as contagens:
-**a Bronze é incremental e não duplica**.
+O lote 2 acrescentou só os 17 dias de novembro (509 linhas de chamados), e a 2ª execução sem arquivos novos manteve
+as contagens: **a Bronze é incremental e não duplica**.
 
 [PRINT: a mesma tabela no notebook 01]
 *Figura 15 – Log controle_cargas_bronze com as três execuções.*
@@ -226,9 +230,10 @@ LIMIT 10;
 [PRINT: resultado]
 *Figura 16 – Bairros com mais chamados abertos, por tipo.*
 
-**Interpretação:** [bairro 1] lidera com [n] chamados abertos, a maioria de [tipo], que é responsabilidade da
-[prefeitura/distribuidora]. [n] deles já passaram do SLA. Os bairros com mais backlog também são os de atendimento
-mais lento (ver consulta 2), então é ali que a gestão deve concentrar equipes.
+**Interpretação:** **Jardim das Flores** lidera com 19 chamados abertos, 17 deles de iluminação pública (11 postes
+apagados e 6 lâmpadas piscando), ou seja, responsabilidade da **prefeitura**; 12 já passaram do SLA. Em seguida vêm
+Santo Antônio (16), Presidente Altino (14) e Novo Osasco (13). Os bairros com mais backlog também estão entre os de
+atendimento mais lento (consulta 2), então é ali que a prefeitura deve concentrar equipes de manutenção.
 
 ### Consulta 2 · Qual o tempo médio de resolução por tipo de problema e por bairro?
 ```sql
@@ -259,9 +264,11 @@ ORDER BY tipo_problema, eh_total DESC, media_horas DESC;
 [PRINT: resultado]
 *Figura 17 – Tempo de resolução por tipo e os bairros mais lentos.*
 
-**Interpretação:** fio caído é resolvido em média em [x] h (SLA 8 h) e queda de energia em [x] h (SLA 24 h). Já poste
-apagado leva [x] h e lâmpada piscando [x] h, com só [x]% dentro do SLA. [Bairro] é o mais lento em [tipo], com média [x]
-vezes maior que a média do tipo.
+**Interpretação:** os problemas da rede elétrica são resolvidos rápido: **fio caído em 6,3 h** em média (SLA 8 h,
+72% no prazo) e **queda de energia em 15,6 h** (SLA 24 h, 85,5% no prazo). A iluminação pública é bem mais lenta:
+**poste apagado leva 106,7 h** (4,4 dias; 64% no prazo) e **lâmpada piscando 163,8 h** (6,8 dias; só 55,6% no prazo).
+**Jardim das Flores** é o bairro mais lento em três dos quatro tipos: lâmpada piscando em 233 h (1,4 vez a média do tipo
+e só 33% no prazo), poste apagado em 151 h e queda de energia em 23,6 h, no limite do SLA.
 
 ### Consulta 3 · Quais chamados devem ser priorizados?
 ```sql
@@ -279,9 +286,11 @@ LIMIT 15;
 *Figura 18 – Fila de prioridade (top 15).*
 
 **Interpretação:** o score soma o peso do tipo (fio caído 100, queda 80, poste 40, lâmpada 20), até 30 pontos pela
-espera, 20 se o SLA venceu e até 20 pelo número de moradores afetados. Por isso o topo da fila é de [fio caído/queda de
-energia], que oferecem risco ou deixam mais gente sem energia. O primeiro poste apagado aparece na posição [n], porque
-está aberto há [x] h com o SLA vencido.
+espera, 20 se o SLA venceu e até 20 pelo número de moradores afetados. Por isso as **11 primeiras posições** são de fio
+caído e queda de energia: no topo estão dois **fios caídos** (Rochdale e Ayrosa), risco de choque, abertos há semanas
+com o SLA de 8 h vencido. Em seguida vêm quedas de energia que deixam muita gente sem luz, como a de Novo Osasco
+(1.643 moradores afetados). O primeiro **poste apagado** só aparece na **posição 12** (Jardim das Flores, aberto há 783 h).
+A fila dá à gestão uma ordem objetiva de atendimento.
 
 ### Consulta 4 · Chuva e vento aumentam os chamados de queda de energia?
 ```sql
@@ -310,9 +319,12 @@ ORDER BY quedas_energia_por_dia DESC;
 [PRINT: resultado]
 *Figura 19 – Chamados por dia conforme o clima.*
 
-**Interpretação:** em dias de **temporal** (chuva de 15 mm ou mais, ou rajada de 50 km/h ou mais) houve em média [x]
-quedas de energia por dia, contra [x] em dias secos, ou seja, [x] vezes mais. A correlação entre chuva e quedas é de [r].
-Os chamados de iluminação pública quase não mudam com o clima (controle). **Resposta: sim.** *Observação:* os chamados
+**Interpretação:** nos **7 dias de temporal** (chuva de 15 mm ou mais, ou rajada de 50 km/h ou mais) houve em média
+**5,71 quedas de energia por dia**, contra 2,40 em dias de chuva fraca (30 dias) e **2,00 em dias secos** (11 dias):
+quase **3 vezes mais** em temporal. Somando fio caído, a rede elétrica vai de 2,91 chamados por dia (seco) para 7,43
+(temporal). A correlação das quedas com a chuva é **0,51** e com a rajada de vento é **0,63**: o vento pesa ainda mais.
+A iluminação pública não acompanha essa escalada (6,7 a 9,7 por dia, sem relação com a chuva) e serve de controle.
+**Resposta: sim.** *Observação:* os chamados
 são simulados e o simulador usa o clima real do dia como fator de risco para a rede elétrica. A consulta mostra que o
 pipeline captura essa relação; com os chamados reais do webapp, ela mediria o efeito verdadeiro.
 
@@ -338,9 +350,11 @@ ORDER BY tipo_problema = 'TOTAL', moradores_afetados DESC;
 [PRINT: resultado]
 *Figura 20 – Moradores afetados por problemas não resolvidos.*
 
-**Interpretação:** hoje [n] moradores de Osasco ([x]% da população) estão afetados por [n] chamados não resolvidos.
-A maior parte vem de [tipo], e [n] desses chamados já passaram do SLA. É o número que a gestão leva para a reunião de
-prioridades. *Limitação:* é uma estimativa, e dois chamados sobre a mesma queda podem contar as mesmas casas.
+**Interpretação:** hoje **12.345 moradores de Osasco** (1,69% da população de 728.615 habitantes do Censo 2022) estão
+afetados por **148 chamados não resolvidos**, em 4.440 domicílios. Só **10 quedas de energia** respondem por **8.130
+moradores** (66% do impacto), enquanto os 72 postes apagados afetam 2.755. Além disso, **101 dos 148 chamados já passaram
+do SLA**. A mensagem para a gestão é clara: poucas quedas de energia concentram a maior parte do impacto e devem ser
+resolvidas primeiro. *Limitação:* é uma estimativa, e dois chamados sobre a mesma queda podem contar as mesmas casas.
 
 ## 9. Tela do MVP consumindo a tabela da Ouro
 
