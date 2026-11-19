@@ -20,9 +20,11 @@ COMO USAR ESTE MODELO (apague este bloco antes de exportar)
 
 | Nome completo | RM |
 |---|---|
-| [nome completo] | [RM] |
-| [nome completo] | [RM] |
-| [nome completo] | [RM] |
+| Guilherme Dal Posolo Matheus | 98694 |
+| Lucas Laia Manentti | 97709 |
+| João Lucas Yudi | 98458 |
+| Guilherme Vargas | 98278 |
+| Ryan Perez Pacheco | 98782 |
 
 ## 2. O produto e as perguntas que o MVP responde
 

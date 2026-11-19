@@ -14,9 +14,11 @@ pelo Airflow, até entregar à tela do MVP o que a gestão vê.
 
 | Nome completo | RM |
 |---|---|
-| _preencher_ | _preencher_ |
-| _preencher_ | _preencher_ |
-| _preencher_ | _preencher_ |
+| Guilherme Dal Posolo Matheus | 98694 |
+| Lucas Laia Manentti | 97709 |
+| João Lucas Yudi | 98458 |
+| Guilherme Vargas | 98278 |
+| Ryan Perez Pacheco | 98782 |
 
 ## Perguntas que o MVP responde
 
