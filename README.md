@@ -22,7 +22,7 @@ pelo Airflow, até entregar à tela do MVP o que a gestão vê.
 
 ## Ficha técnica do MVP
 
-| | |
+| Item | Resposta |
 |---|---|
 | **Nome do produto** | Akona Energy |
 | **Cidadão e território** | Moradores de Osasco (SP), 728.615 habitantes (IBGE, Censo 2022), que reportam os problemas; e a gestão (prefeitura e distribuidora), que atende os chamados |
